@@ -132,11 +132,14 @@ def _lexical_diversity(doc: Document) -> Signal:
 
     # Narrow band, small weight. MATTR ~0.72 is typical of both classes; only
     # the extremes carry any information.
+    # Measured 3 right / 5 wrong across 12 labelled documents - below chance.
+    # Cut hard for the same reason as forensics.em_dash: small n, so reduced
+    # rather than inverted, but it should not move a verdict.
     if mattr > 0.80:
-        lo = -0.35
+        lo = -0.10
         note = "high lexical variety"
     elif mattr < 0.62:
-        lo = 0.30
+        lo = 0.10
         note = "low lexical variety"
     else:
         lo = 0.0

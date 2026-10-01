@@ -119,7 +119,11 @@ def _em_dash(raw: str, n_words: int) -> Signal:
     return Signal(
         name="forensics.em_dash",
         layer="forensics",
-        logodds=saturating(per_1k, 8.0, 0.85),
+        # Measured 1 right / 3 wrong across 12 labelled documents - BELOW
+        # CHANCE. The most-cited signal in popular AI detection is
+        # anti-correlated here. n is small, so it is cut rather than inverted,
+        # but it can no longer meaningfully affect a verdict.
+        logodds=saturating(per_1k, 8.0, 0.25),
         evidence=ev,
         detail=per_1k,
     )
