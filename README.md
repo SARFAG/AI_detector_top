@@ -108,6 +108,9 @@ quoted span of input.
 | `code` | Docstring uniformity, generic names, absent human traces | medium / medium |
 | `syntax` | Syntactic template repetition, clause uniformity | **high / high** |
 | `stance` | Authorial absence, term invariance, enumeration density | high / medium |
+| `stylometry` | Burrows's Delta over function words, nearest-centroid | high / medium |
+| `discourse` | Sentence-type mix (3 further features measured and rejected) | low / medium |
+| `rewrite` | RAIDAR rewriting distance — needs a model callable | high / high |
 | `probe` *(optional)* | Binoculars / true perplexity — needs PyTorch | high / high |
 
 Design rules that are enforced in code:
@@ -121,6 +124,41 @@ Design rules that are enforced in code:
 4. **Evidence always travels with the score.**
 
 The reasoning behind every signal is in [docs/RESEARCH.md](docs/RESEARCH.md).
+
+## Classical stylometry and authorship verification
+
+`stylometry.py` implements **Burrows's Delta** — the canonical authorship
+method, which reads only function-word rates and ignores content entirely.
+That makes it near-orthogonal to every other layer, which is why ablation
+ranks it second overall despite centroids fitted on seven documents.
+
+It also exposes the stronger and fairer question:
+
+```python
+from aidetect.stylometry import verify_authorship
+verify_authorship(candidate_doc, their_past_writing, other_peoples_writing)
+```
+
+**Authorship verification** asks "does this match *this person's* known
+writing?" rather than "does this look machine-written?". Comparing someone
+against their own baseline sidesteps the fairness problem in `LIMITS.md`
+entirely: writing simply, or in a second language, is no longer evidence of
+anything, because the comparison is to themselves. If you have a person's
+prior work, prefer this over AI detection.
+
+## RAIDAR (rewriting distance)
+
+Ask a model to rewrite the text and measure how much changed. It rewrites
+*human* text heavily and *machine* text barely, because machine text already
+looks like its own output. Needs no corpus, lexicon or register assumption —
+the weakness that defeated this detector on terse technical prose.
+
+```python
+from aidetect.rewrite import raidar_signal
+raidar_signal(doc, lambda t: call_your_model(t))
+```
+
+The model call is yours to supply; this module never touches the network.
 
 ## Optional: the model-backed layer
 
@@ -225,10 +263,10 @@ of zeros:
 
 | signal | log-loss cost |
 |---|---|
-| `syntax.template_repetition` | **+0.0520** |
-| `statistical.burstiness` | +0.0198 |
-| `stance.authorial_absence` | +0.0139 |
-| `lexical.tier1_register` | +0.0061 |
+| `syntax.template_repetition` | **+0.0396** |
+| `stylometry.burrows_delta` | **+0.0205** |
+| `stance.authorial_absence` | +0.0073 |
+| `statistical.burstiness` | +0.0064 |
 
 ## Tests
 

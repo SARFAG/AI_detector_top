@@ -20,7 +20,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from . import code as code_layer
-from . import forensics, lexical, prompts, stance, statistical, structural, syntax
+from . import discourse, forensics, lexical, prompts, stance, statistical
+from . import structural, stylometry, syntax
 from .signals import Signal, sigmoid
 from .text import Document, parse
 
@@ -45,6 +46,10 @@ LAYER_WEIGHTS = {
     # marker-free register that defeated the original ensemble.
     "syntax": 0.95,
     "stance": 0.95,
+    # Content-free classical stylometry, near-orthogonal to the rest, but its
+    # centroids are fitted on seven documents - hence well below 1.0.
+    "stylometry": 0.70,
+    "discourse": 0.60,
 }
 
 BANDS = [
@@ -130,6 +135,8 @@ def analyse(text: str, include_prompt_layer: bool = True) -> Report:
     signals += code_layer.analyse(doc)
     signals += syntax.analyse(doc)
     signals += stance.analyse(doc)
+    signals += stylometry.analyse(doc)
+    signals += discourse.analyse(doc)
     if include_prompt_layer:
         signals += prompts.analyse(doc)
 
