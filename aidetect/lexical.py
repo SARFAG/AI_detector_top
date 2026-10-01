@@ -12,6 +12,7 @@ from typing import Dict, List, Tuple
 
 from .lexicon import (
     HUMAN_MARKERS,
+    HUMAN_MARKER_PATTERNS,
     MODEL_PROFILES,
     TIER1_WORDS,
     TIER2_WORDS,
@@ -55,7 +56,10 @@ _RX_T1 = _word_regex(TIER1_WORDS)
 _RX_T2 = _word_regex(TIER2_WORDS)
 _RX_T3 = _phrase_regex(TIER3_PHRASES)
 _RX_T4 = _phrase_regex(TIER4_LEAKAGE)
-_RX_HUMAN = _phrase_regex(HUMAN_MARKERS)
+_RX_HUMAN = re.compile(
+    "(?:" + "|".join([_bounded(m) for m in HUMAN_MARKERS]
+                     + list(HUMAN_MARKER_PATTERNS)) + ")",
+    re.IGNORECASE | re.MULTILINE)
 
 # "It's not just X, it's Y" / "This isn't about X - it's about Y"
 _RX_NEG_PARALLEL = re.compile(

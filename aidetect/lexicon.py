@@ -95,8 +95,21 @@ HUMAN_MARKERS = [
     "i could be wrong", "no idea why", "not sure if", "someone correct me",
     "i might be misremembering", "don't quote me",
     # Anti-structure
-    "anyway", "anyways", "whatever", "long story short", "sorry for the rant",
+    "anyway", "anyways", "long story short", "sorry for the rant",
     "edit:", "update:", "tl;dr",
+]
+
+# Markers whose human reading depends on context. A plain word-boundary match
+# is wrong for these: "Whatever remains produces a warning" is a relative
+# pronoun in formal prose, not the dismissive interjection, and it was costing
+# a machine-written specification 0.84 log-odds of phantom human evidence.
+HUMAN_MARKER_PATTERNS = [
+    # Dismissive "whatever" only: standalone, or closing a clause.
+    r"\bwhatever\s*(?=[.!?,;]|$)",
+    # "right" / "sure" as sentence-initial concessives, not adjectives.
+    r"(?:^|[.!?]\s+)(?:right|sure|fine)\s*[,.]",
+    # Trailing "or something" / "or whatever".
+    r"\bor (?:something|whatever)\b",
 ]
 
 # --------------------------------------------------------------------------

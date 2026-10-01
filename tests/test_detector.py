@@ -490,6 +490,29 @@ class TestFormattingInvariance(unittest.TestCase):
         self.assertLess(analyse(self._markdownify(human)).probability, 0.5)
 
 
+class TestRegressionWhateverSense(unittest.TestCase):
+    """Regression: 'whatever' matched as a human marker in formal prose.
+
+    "Whatever remains produces a soil_warnings entry" is a relative pronoun,
+    not the dismissive interjection, and it was crediting a machine-written
+    specification with 0.84 log-odds of phantom human evidence. Word
+    boundaries were not enough here - the word's SENSE depends on context.
+    """
+
+    def test_relative_pronoun_is_not_a_human_marker(self):
+        for text in ("Whatever remains produces a warning",
+                     "use whatever the planner resolves",
+                     "whatever value the field holds"):
+            self.assertEqual(_RX_HUMAN.findall(text), [],
+                             f"false human marker in: {text!r}")
+
+    def test_dismissive_sense_still_matches(self):
+        for text in ("whatever, I gave up", "it broke again. whatever.",
+                     "I fixed it or something"):
+            self.assertTrue(_RX_HUMAN.findall(text),
+                            f"missed a real human marker in: {text!r}")
+
+
 class TestIdentifierDispersion(unittest.TestCase):
     """Found by diffing a matched pair - same feature request, 35 of 36
     identifiers shared, one written by a model and one by a person."""
