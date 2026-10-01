@@ -72,6 +72,30 @@ defeat surface-feature detection**, and there are certainly other registers that
 do the same which are not yet in the sample corpus. A null result from this tool
 means "no applicable evidence found", never "human".
 
+## 3b. The corpus has a blind spot that matters
+
+**There is no human-written technical writing in `samples/`.** The human
+samples are a blog post, a forum post and a product review - all informal. Every
+specification in the corpus is machine-written.
+
+This was discovered while testing whether two gated signals
+(`enumeration_density`, `term_invariance`) could safely fire on shorter text.
+Measured at 190 words, comma density runs 37-44 per 1k for the human samples,
+27-58 for machine prose, and **75-99 for the specs**. That looks like a clean
+separation, and it is - but it separates by *genre*, not by authorship. A
+human-written specification would sit at 75-99 too.
+
+Those gates were therefore **left in place**. Lowering them would have improved
+the score on the machine-written specs in the corpus while baking in the rule
+"technical register implies machine", which is precisely the failure mode in
+section 1 and section 3: it would misfire on exactly the people least able to
+contest it.
+
+**Before trusting this tool on technical, legal or academic prose, add
+human-written documents in those registers to the corpus and re-measure.**
+Until then, treat any confident machine verdict on formal technical writing as
+unvalidated.
+
 ## 4. False negatives you should expect
 
 - Short text. Below ~250 words the detector withholds judgement on purpose;

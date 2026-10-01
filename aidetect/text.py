@@ -52,10 +52,39 @@ class Document:
         self._lower = self.prose.lower()
 
 
-def split_sentences(text: str) -> List[str]:
-    """Split on terminal punctuation, rejoining false breaks after abbreviations."""
-    if not text.strip():
-        return []
+# A line ending in one of these is mid-clause; the next line continues it.
+_CONTINUATION_TAIL = re.compile(
+    r"(?:[,;:\-\u2013\u2014(\[{]|\b(?:and|or|but|the|a|an|of|to|in|on|for|with|"
+    r"that|which|as|at|by|from|into|than|then)\s*)$", re.IGNORECASE)
+
+
+def _looks_terminal(line: str, nxt: str) -> bool:
+    """Is this newline a sentence boundary, even without terminal punctuation?
+
+    Dropping full stops is a trivial way to defeat a punctuation-only splitter:
+    unpunctuated lines get glued into one huge pseudo-sentence, which inflates
+    length variance and makes machine text read as bursty (i.e. human). Line
+    breaks in line-oriented text are real boundaries and are treated as such.
+
+    Guarded so that hard-wrapped prose is not over-split: a line that ends
+    mid-clause, or is followed by a lowercase continuation, stays joined.
+    """
+    s = line.strip()
+    if not s:
+        return False
+    if s[-1] in ".!?\u2026":
+        return True          # the regex splitter already handles this
+    if len(s.split()) < 3:
+        return False
+    if _CONTINUATION_TAIL.search(s):
+        return False
+    if not nxt:
+        return True
+    return nxt[0].isupper() or nxt[0].isdigit() or nxt[0] in "-*\u2022"
+
+
+def _split_block(text: str) -> List[str]:
+    """Split one block on terminal punctuation, rejoining false breaks."""
     pieces = _SENT_SPLIT_RE.split(text)
     out: List[str] = []
     for piece in pieces:
@@ -73,6 +102,28 @@ def split_sentences(text: str) -> List[str]:
                 out[-1] = prev + " " + piece
                 continue
         out.append(piece)
+    return out
+
+
+def split_sentences(text: str) -> List[str]:
+    """Split into sentences, treating terminal-looking line breaks as boundaries."""
+    if not text.strip():
+        return []
+    lines = text.split("\n")
+    blocks: List[str] = []
+    current: List[str] = []
+    for i, line in enumerate(lines):
+        current.append(line)
+        nxt = next((l.strip() for l in lines[i + 1:] if l.strip()), "")
+        if _looks_terminal(line, nxt):
+            blocks.append(" ".join(current))
+            current = []
+    if current:
+        blocks.append(" ".join(current))
+
+    out: List[str] = []
+    for block in blocks:
+        out.extend(_split_block(block))
     return out
 
 

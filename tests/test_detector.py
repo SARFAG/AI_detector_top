@@ -339,6 +339,45 @@ class TestRegressionPronounCliff(unittest.TestCase):
         self.assertLess(stance._authorial_absence(parse(text)).logodds, 0)
 
 
+class TestRegressionPunctuationStripping(unittest.TestCase):
+    """Regression: removing full stops used to defeat the detector.
+
+    A submitted spec variant with terminal punctuation dropped from some lines
+    scored 46.6% ("inconclusive") where the punctuated phrasing scored 80.7%.
+    The splitter only broke on [.!?], so unpunctuated lines were glued into one
+    53-word pseudo-sentence. That inflated length variance and made the text
+    read as bursty - i.e. human. Stripping punctuation is a one-line attack, so
+    the splitter now treats terminal-looking line breaks as boundaries.
+    """
+
+    @staticmethod
+    def _strip_terminals(text):
+        return "\n".join(re.sub(r"\.$", "", l.rstrip()) for l in text.splitlines())
+
+    def test_stripping_full_stops_does_not_flip_verdict(self):
+        text = read(os.path.join(SAMPLES, "machine", "spec_cross_mission.txt"))
+        self.assertGreater(analyse(text).probability, 0.75)
+        self.assertGreater(analyse(self._strip_terminals(text)).probability, 0.6,
+                           "dropping full stops defeated the detector")
+
+    def test_sentence_count_survives_punctuation_loss(self):
+        text = read(os.path.join(SAMPLES, "machine", "spec_cross_mission.txt"))
+        before = len(parse(text).sentences)
+        after = len(parse(self._strip_terminals(text)).sentences)
+        self.assertGreater(after, before * 0.7,
+                           "sentence segmentation collapsed without punctuation")
+
+    def test_hard_wrapped_prose_is_not_oversplit(self):
+        """The guard against the opposite error: wrapped lines stay joined."""
+        wrapped = ("The quick brown fox jumped over the\n"
+                   "lazy dog that was sleeping by the\n"
+                   "river bank in the afternoon sun.")
+        self.assertEqual(len(parse(wrapped).sentences), 1)
+
+    def test_abbreviations_still_rejoin(self):
+        self.assertEqual(len(split_sentences("Dr. Smith arrived. He was late.")), 2)
+
+
 class TestWindowedFraction(unittest.TestCase):
     def test_fraction_bounded_and_consistent(self):
         text = read(os.path.join(SAMPLES, "machine", "seo_article.txt"))
