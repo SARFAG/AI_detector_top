@@ -218,6 +218,39 @@ Perturbed variants keep the **machine** label: roughening the surface of
 generated text does not make it human-written. They are hard negatives, which
 is exactly what a detector tuned only on clean output gets wrong.
 
+## Adversarial rewriter (`aidetect.bypass`)
+
+Greedy search over the attack space: each round tries every remaining attack,
+keeps whichever lowers the score most, repeats. Attacks interact, so a fixed
+order under-reports what the attack space can do — greedy reaches a lower score
+on every document tested, by up to 13.5 points.
+
+```bash
+python3 -m aidetect.bypass doc.txt --target 0.4 --rounds 30 --out rewritten.txt
+python3 -m aidetect.bypass doc.txt --json --repeats
+```
+
+**Measured result: it does not achieve bypass.** Full attack space, repeats
+allowed, 30 rounds:
+
+```
+document                 start   greedy   crossed 0.5
+chatgpt_remote_work     100.0%    99.8%            no
+claude_explainer         98.6%    94.3%            no
+seo_article             100.0%    97.9%            no
+spec_cross_mission       95.5%    55.0%            no
+spec11 (bulleted)        97.6%    80.8%            no
+spec12 (prose)           96.5%    83.3%            no
+```
+
+Best case gets within 5 points of the threshold and exhausts the attack space
+at 10 rounds, with repeated `paragraph_variance` doing most of the work. A test
+pins this outcome, so a change on either side makes it visible.
+
+**Caveat, same as the harness:** every attack is mechanical. A real LLM
+paraphrase rewrites vocabulary, rhythm and structure coherently at once, and is
+untested here — see `aidetect/rewrite.py`.
+
 ## Calibrating to your domain
 
 The shipped weights are hand-set priors from the literature, **not** a fit to
