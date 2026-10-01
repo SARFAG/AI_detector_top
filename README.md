@@ -152,6 +152,47 @@ python3 -m aidetect.calibrate --human corpus/human --machine corpus/machine
 Collect ~200 documents per class from your own domain first. Below that you are
 fitting noise, and the tool will say so.
 
+## Three-class triage (`--triage`)
+
+Matches the output shape of production detectors: `human` / `ai_assisted` /
+`ai`, plus the **word offsets** of the machine-looking spans.
+
+```bash
+python3 -m aidetect --triage mixed.txt
+```
+
+```
+  prediction          : ai_assisted
+  fraction_assisted   : 0.47
+  words               : 878
+  machine spans       : 2
+    words     0-100   admin. Council tax, the energy switch, the post redirect ...
+    words   500-878   convinced it was pgbouncer. It wasn't pgbouncer. I want ...
+```
+
+Spans come from **per-word probability aggregation**, not binary window flags:
+each window contributes its probability to every word it covers, and each word
+takes the mean. Measured on synthetic mixed documents this lifts span recall
+from ~0.45 to 0.83 at similar precision, because a window straddling a seam is
+diluted below threshold and binary flagging loses its machine half entirely.
+
+Validated against `aidetect/synth.py`, which splices known-human and
+known-machine text into documents whose machine spans are known *exactly*:
+
+| | |
+|---|---|
+| document class agreement | 12/14 |
+| span precision | 0.78 |
+| span recall | 0.83 |
+| span F1 | 0.80 |
+| span IoU | 0.70 |
+
+**Read those numbers with two caveats.** Spliced text has hard seams where real
+assisted writing blends, so this is an upper bound on real performance. And
+localisation is only stride-accurate — spans smear by up to ~50 words at the
+edges, short inserts are missed, and an excerpt printed at a span boundary will
+often show human text.
+
 ## Evaluation
 
 ```bash

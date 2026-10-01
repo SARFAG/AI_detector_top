@@ -14,6 +14,7 @@ import sys
 from typing import List
 
 from .detector import Report, analyse, analyse_segments, fraction_ai
+from .triage import classify
 
 BAR_WIDTH = 40
 
@@ -106,6 +107,9 @@ def main(argv: List[str] | None = None) -> int:
     ap.add_argument("--all", action="store_true", help="show every signal")
     ap.add_argument("--segments", action="store_true",
                     help="score paragraph windows to localise machine-written spans")
+    ap.add_argument("--triage", action="store_true",
+                    help="three-class verdict (human / ai_assisted / ai) with "
+                         "machine span offsets")
     ap.add_argument("--fraction", action="store_true",
                     help="also score fixed windows and report the fraction above threshold")
     ap.add_argument("--threshold", type=float, default=None,
@@ -145,6 +149,31 @@ def main(argv: List[str] | None = None) -> int:
                     excerpt = " ".join(chunk.split())[:90]
                     print(f"  {p:6.1%} {_bar(p)}{flag}")
                     print(f"         {excerpt}...\n")
+            continue
+
+        if args.triage:
+            t = classify(text)
+            if args.json:
+                results.append({
+                    "path": path, "prediction": t.prediction,
+                    "fraction_ai": round(t.fraction_ai, 4),
+                    "fraction_assisted": round(t.fraction_assisted, 4),
+                    "word_count": t.word_count,
+                    "machine_spans": [{"start": a, "end": b} for a, b in t.machine_spans],
+                })
+            else:
+                print(f"=== {path} (triage) ===\n")
+                print(f"  prediction          : {t.prediction}")
+                print(f"  fraction_ai         : {t.fraction_ai:.2f}")
+                print(f"  fraction_assisted   : {t.fraction_assisted:.2f}")
+                print(f"  words               : {t.word_count}")
+                if t.machine_spans:
+                    print(f"  machine spans       : {len(t.machine_spans)}")
+                    for (a, b), ex in zip(t.machine_spans, t.excerpt_spans(text, 5)):
+                        print(f"    words {a:>5}-{b:<5} {ex[:62]}")
+                if t.note:
+                    print(f"  note                : {t.note}")
+                print()
             continue
 
         report = analyse(text)
