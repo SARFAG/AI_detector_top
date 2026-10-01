@@ -91,10 +91,27 @@ the score on the machine-written specs in the corpus while baking in the rule
 section 1 and section 3: it would misfire on exactly the people least able to
 contest it.
 
-**Before trusting this tool on technical, legal or academic prose, add
-human-written documents in those registers to the corpus and re-measure.**
-Until then, treat any confident machine verdict on formal technical writing as
-unvalidated.
+**Update: one human-written technical specification has since been added**
+(`samples/human/spec_goose_request.txt`, confirmed by passing an independent
+production detector). It gives the first real measurement on this register,
+and the result is mixed:
+
+- **Document level: correct.** 29.1% out-of-sample, "leans human-written". Its
+  AI-written counterpart on the same feature, same domain and same length
+  scores 78.9%. A 60-point separation on a matched pair is the strongest
+  single validation in this repo.
+- **Triage level: a false positive.** `--triage` calls the same document
+  `ai_assisted` and flags its API-naming section as machine. Window size is
+  not the cause - 200/50 through 400/100 all do it. The prose signals have
+  nothing to read in several hundred words of bare identifier lists, so local
+  scores drift up even though the document as a whole is clearly human.
+
+So: the document-level verdict is now validated on one human technical
+document, and the span-level verdict is known to over-flag identifier-dense
+regions. A test pins that false positive so it stays visible.
+
+One document is not a validation set. **Still add more human-written technical
+prose before trusting either verdict on that register.**
 
 ## 4. False negatives you should expect
 

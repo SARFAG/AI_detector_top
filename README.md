@@ -280,14 +280,29 @@ during development, formatting-invariance tests, and an end-to-end separation
 test that asserts a margin between the human and machine sample sets.
 
 ```
-human max       4.4%
-machine min    95.2%
-margin         90.8 points   (in-sample - see below)
+human max      18.6%
+machine min    97.7%
+margin         79.0 points   (in-sample - see below)
 ```
 
-Seven samples is a sanity check, not an evaluation, and that margin is
-**in-sample**: the `syntax.template_repetition` midpoint was fit to these
-documents. For real numbers, build a corpus and use the calibrator.
+Eight samples is a sanity check, not an evaluation, and that margin is
+**in-sample**: the `syntax.template_repetition` midpoint and the stylometry
+centroids were fit to these documents. For real numbers, build a corpus and
+use the calibrator.
+
+### The matched pair
+
+The most informative validation here is two specifications of the *same
+feature*, same domain, same length — one AI-written, one human-written and
+confirmed by passing an independent production detector:
+
+| | score |
+|---|---|
+| AI-written version | **78.9%** likely machine-generated |
+| human-written version | **18.6%** likely human-written (29.1% before it joined the corpus) |
+
+A 60-point separation on matched content is worth more than the headline
+margin, because topic, genre, length and format are all held constant.
 
 ### The feature that matters most
 

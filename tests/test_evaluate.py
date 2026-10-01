@@ -107,7 +107,8 @@ class TestCorpusEvaluation(unittest.TestCase):
     def test_runs_and_reports_both_modes(self):
         r = evaluate_corpus(os.path.join(SAMPLES, "human"),
                             os.path.join(SAMPLES, "machine"))
-        self.assertEqual(r["n"], 7)
+        self.assertEqual(r["n"], r["n_human"] + r["n_machine"])
+        self.assertGreaterEqual(r["n"], 8)
         self.assertIn("heuristic_in_sample", r)
         self.assertIn("fitted_out_of_sample", r)
         self.assertIn("overfitting_gap_auroc", r)

@@ -1,0 +1,23 @@
+1. Encountered this situation last week. Someone on the team edited 20240312_add_orders_index.sql after it had already been deployed to staging (modified index to be a partial), pushed it, and goose on every environment just said no migrations to run because that version had already been applied. Production got the old index, staging got the new one, and no one knew for days.
+
+I would really like goose to be able to identify an applied migration which isn't the same as what was applied.
+
+Rough idea of what I want, open to ideas:- 
+
+A check that runs over the applied migrations, reports what it finds. The results I care about are, the migration is the same as what was applied, is now different, the file is missing, or goose has no way to know (old rows from when this feature wasn't present). Pending migrations that haven't been run are not considered failures in any of this, they're just pending. The check should not alter records marked as applied and shouldn't write to any of the migration files.
+
+An opt-in guard when running new migrations. If it's enabled and there is an applied migration that has drifted, it should stop and not apply any new migrations. The 'no way to know' case shouldn't trigger this guard on its own, only actual changes should.
+2. Some way to flag changes as intentional, proceed. After which, the check will treat the file currently on disk as the migration that was applied. The migration is not re-run, and it's applied status is not changed. If I attempt to accept multiple migrations and one of them can't be accepted, I don't want some of them to be accepted and some not. All or nothing.
+3. There should be no need to do anything to re-baseline.
+
+I would want to be able to drive this from Go, as well as from the goose binary, same behavior. One thing about the cli, is that finding drift is the check doing its job, it shouldn't return as a failed command.
+
+To make this concrete, the names I'd go with:
+   * Go: Provider.Verify(ctx) and Provider.Accept(ctx, versions ...int64), both return ([]*VerificationResult, error). Top-level Verify(db, dir, opts...), VerifyContext(ctx, db, dir, opts...), Accept(db, dir, versions []int64, opts...), AcceptContext(ctx, db, dir, versions, opts...).
+   * VerificationResult: Version, Source (nil when the file is missing), State, AppliedChecksum, AppliedFilename, SourceChecksum. VerificationState is a string: "match", "mismatch", "missing_source", "unknown", "not_applicable" (constants VerificationMatch, VerificationMismatch, VerificationMissingSource, VerificationUnknown, VerificationNotApplicable). MigrationStatus gets AppliedChecksum, AppliedFilename, Verification.
+   * Guard: WithVerifyChecksums(bool) on Provider, WithVerifyChecksum() top-level. Drift = ChecksumMismatchError{Version, AppliedChecksum, SourceChecksum}, nothing applied. With WithNoVersioning / WithDisableVersioning, Verify and Accept error and the guard is a no-op. WithAllowMissing doesn't change what Verify returns.
+   * Storage: two columns on the version table, checksum and filename, nullable. checksum = SHA-256 of the file bytes, lowercase hex. filename = base name. Go migration with no .go file: both empty. Old tables get the columns added in place by the next operation, any dialect, existing rows untouched.
+4. 
+
+* Store layer: database.MetadataUpdater = Store + UpdateMetadata(ctx, db DBTxConn, req UpdateMetadataRequest) error, request has Version, Checksum, Filename. InsertRequest, GetMigrationResult, ListMigrationsResult get Checksum and Filename. A store without any of this still applies migrations, its rows verify as unknown, and accept errors if it can't update.
+* CLI: verify, accept [VERSION...], and -verify-checksums on up / up-by-one / up-to. One line per applied version: version, filename, state. verify exits 0 on drift. accept exits non-zero and changes nothing if it fails or gets a non-number.

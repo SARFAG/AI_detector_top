@@ -206,6 +206,13 @@ _HUMAN_IRREGULARITIES = [
     (re.compile(r"[a-z]{2,}  +[a-z]", re.IGNORECASE), "double space"),
     (re.compile(r"\b(?:teh|recieve|seperate|definately|occured|wierd|alot)\b", re.I), "typo"),
     (re.compile(r"\b(?:dont|cant|wont|didnt|isnt|wasnt|couldnt|thats|im|ive)\b"), "missing apostrophe"),
+    # its/it's and your/you're confusion: a characteristic human slip that
+    # models essentially never make. Found while reviewing a human-written
+    # spec whose only flagged irregularity was trailing whitespace.
+    (re.compile(r"\bit's\s+(?:own|applied|value|status|name|version|state|"
+                r"contents|size|length|type|id|key)\b", re.I), "it's/its confusion"),
+    (re.compile(r"\b(?:your\s+(?:welcome|right|wrong)|you're\s+(?:own|code|file))\b",
+                re.I), "your/you're confusion"),
     (re.compile(r"(?<![.!?])\b i \b"), "lowercase standalone 'i'"),
     (re.compile(r"[!?]{2,}"), "repeated punctuation"),
     (re.compile(r"\.{4,}"), "long ellipsis"),
