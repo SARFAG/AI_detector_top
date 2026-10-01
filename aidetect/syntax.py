@@ -62,7 +62,10 @@ def _template_repetition(doc: Document) -> Signal:
     varying vocabulary), but the exact constant is not trustworthy. Re-fit it on
     your own corpus with aidetect.calibrate before relying on the magnitude.
     """
-    if doc.word_count < 200:
+    # Below the 200-word window size the measure falls back to whole-document
+    # share, which at 150-200 words is approximately one window anyway. Gating
+    # at 200 discarded the signal entirely on documents just under it.
+    if doc.word_count < 150:
         return Signal("syntax.template_repetition", "syntax", 0.0, [], 0.0)
 
     shapes = [_shape(w) for w in doc.words]

@@ -295,6 +295,50 @@ class TestStanceLayer(unittest.TestCase):
         self.assertGreater(sig.logodds, 0.6)
 
 
+class TestRegressionPronounCliff(unittest.TestCase):
+    """Regression: authorial_absence used to be a cliff.
+
+    Exactly-zero presence scored strongly; anything else scored 0.00. A
+    rewritten spec containing a single "I" in 188 words (5.3 markers per 1k,
+    over 12x below the lowest human sample) therefore scored nothing. One
+    pronoun defeated the signal - not a property worth keeping in a detector
+    anyone might try to evade.
+    """
+
+    BASE = ("The handler validates each payload before the worker commits it. "
+            "Entries resolve against the registry in declaration order. "
+            "A malformed entry fails the batch without a partial write. "
+            "Digest and size are checked before the record is parsed. ")
+
+    def test_one_pronoun_does_not_cancel_the_signal(self):
+        clean = self.BASE * 13
+        with_pronoun = "I opened the checkout. " + clean
+        a = stance._authorial_absence(parse(clean))
+        b = stance._authorial_absence(parse(with_pronoun))
+        self.assertGreater(a.logodds, 0.4)
+        self.assertGreater(b.logodds, 0.3,
+                           "a single pronoun flattened the signal to nothing")
+        self.assertLess(a.logodds - b.logodds, 0.25,
+                        "one pronoun should taper the score, not cancel it")
+
+    def test_signal_is_monotonic_in_presence(self):
+        """More authorial presence must never increase the machine score."""
+        prev = None
+        for extra in (0, 1, 3, 6, 12):
+            text = ("I think you should check this, though I am not sure. " * extra
+                    + self.BASE * 13)
+            lo = stance._authorial_absence(parse(text)).logodds
+            if prev is not None:
+                self.assertLessEqual(lo, prev + 1e-9,
+                                     "signal is not monotonic in presence")
+            prev = lo
+
+    def test_human_density_still_scores_human(self):
+        text = ("I spent all day on this and honestly I am not sure you would "
+                "agree with me, but here is what I found. Maybe it helps? ") * 10
+        self.assertLess(stance._authorial_absence(parse(text)).logodds, 0)
+
+
 class TestWindowedFraction(unittest.TestCase):
     def test_fraction_bounded_and_consistent(self):
         text = read(os.path.join(SAMPLES, "machine", "seo_article.txt"))

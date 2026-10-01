@@ -56,27 +56,43 @@ def _authorial_absence(doc: Document) -> Signal:
     person = len(_RX_FIRST_SECOND.findall(doc.prose))
     meta = len(_RX_META.findall(doc.prose))
     questions = doc.prose.count("?")
-
-    person_per_1k = person * 1000.0 / n
     presence = person + meta + questions
+    density = presence * 1000.0 / n
 
-    if presence == 0:
-        # Scale with length: 180 authorless words is notable, 1000 is striking.
-        scale = max(0.0, min((n - 180) / 820.0, 1.0))
-        return Signal(
-            "stance.authorial_absence", "stance", 0.50 + 1.00 * scale,
-            [f"no first/second person, no hedges or asides, no questions "
-             f"across {n} words"], 0.0)
+    # Measured on the corpus: humans run 64-89 presence markers per 1k words,
+    # machine prose 19-47, marker-free specs 0-5.
+    #
+    # This was previously a cliff - exactly zero scored strongly, anything else
+    # scored 0.00. A rewritten spec with a single "I" in 188 words (5.3/1k, over
+    # 12x below the lowest human) therefore scored nothing. One pronoun defeated
+    # the signal, which is not a property worth keeping in a detector anyone
+    # might try to evade. It is now continuous.
+    length_scale = max(0.0, min((n - 180) / 820.0, 1.0))
 
-    if person_per_1k >= 25 or meta >= 3:
+    if density < 8.0:
+        # Essentially authorless. A stray pronoun tapers the score, it does not
+        # cancel it.
+        lo = (0.50 + 1.00 * length_scale) * (1.0 - 0.25 * (density / 8.0))
+        note = ("no first/second person, no hedges or asides, no questions"
+                if presence == 0 else
+                f"near-zero authorial presence ({presence} marker(s), "
+                f"{density:.1f}/1k)")
+        return Signal("stance.authorial_absence", "stance", lo,
+                      [f"{note} across {n} words"], density)
+
+    if density >= 55.0:
         return Signal(
             "stance.authorial_absence", "stance",
-            -saturating(person_per_1k / 10.0 + meta, 3.0, 1.4),
-            [f"{person_per_1k:.0f} first/second-person per 1k, {meta} hedges/asides, "
-             f"{questions} questions"], person_per_1k)
+            -saturating((density - 55.0) / 15.0, 2.0, 1.4),
+            [f"{density:.0f} presence markers per 1k ({person} person, "
+             f"{meta} hedges, {questions} questions)"], density)
 
-    return Signal("stance.authorial_absence", "stance", 0.0,
-                  [f"{person_per_1k:.0f} first/second-person per 1k"], person_per_1k)
+    # Between the two: declining positive evidence, deliberately mild, because
+    # formal human writing legitimately lives here.
+    lo = (55.0 - density) / 47.0 * 0.45
+    return Signal("stance.authorial_absence", "stance", lo,
+                  [f"low authorial presence ({density:.0f}/1k; "
+                   f"human samples run 64-89)"], density)
 
 
 def _term_invariance(doc: Document) -> Signal:
