@@ -68,6 +68,44 @@ class TestDelta(unittest.TestCase):
         self.assertGreater(sig.logodds, 0.0)
 
 
+class TestRegressionZeroVarianceBlowup(unittest.TestCase):
+    """Regression: zero-variance function words blew up out-of-corpus deltas.
+
+    On a small reference corpus many function words ("she", "his", "him")
+    never appear, so their standard deviation is zero. Flooring that at 1e-9
+    gave any OUTSIDE document that used one a z-score near a million, and a
+    reported Delta of 76805 instead of ~0.8. In-corpus documents never trigger
+    it, so in-sample testing could not see the bug - it surfaced only on a
+    submitted document. Such words are now excluded, not floored.
+    """
+
+    def test_zero_variance_words_are_excluded(self):
+        H, M = _docs("human"), _docs("machine")
+        model = stylometry.DeltaModel.fit([profile(d) for d in H + M])
+        self.assertLess(len(model.active), len(stylometry.FUNCTION_WORDS),
+                        "expected some zero-variance words to be dropped")
+        for w in model.active:
+            self.assertGreaterEqual(model.sds[w], stylometry.SD_FLOOR)
+
+    def test_out_of_corpus_delta_stays_bounded(self):
+        """A document using words absent from the corpus must not explode."""
+        H, M = _docs("human"), _docs("machine")
+        nc = NearestCentroid(H, M)
+        outsider = parse(
+            "She told him that her brother who had seen them would never say "
+            "who she was, and he said nothing to her about it at all. " * 25)
+        margin, dh, dm = nc.score(outsider)
+        self.assertLess(dh, 20.0, f"delta to human exploded: {dh}")
+        self.assertLess(dm, 20.0, f"delta to machine exploded: {dm}")
+
+    def test_shipped_centroids_produce_sane_deltas(self):
+        for d in _docs("human") + _docs("machine"):
+            sig = stylometry.analyse(d)[0]
+            self.assertLess(abs(sig.detail), 5.0,
+                            f"shipped centroid margin out of range: {sig.detail}")
+            self.assertLessEqual(abs(sig.logodds), 1.3)
+
+
 class TestAuthorshipVerification(unittest.TestCase):
     """The stronger question: does this match THIS author, not 'an AI'?"""
 

@@ -23,7 +23,7 @@ Two uses here:
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .text import Document, mean, stdev, tokenize_words
@@ -85,11 +85,31 @@ def profile(doc: Document) -> Profile:
     return Profile(freqs, pf, pb, len(words))
 
 
+# Frequencies are rates in roughly the 0 - 0.07 range, so this is the smallest
+# standard deviation that still means something. Below it the word carries no
+# usable variance and is dropped rather than divided by.
+SD_FLOOR = 1e-4
+
+
 @dataclass
 class DeltaModel:
-    """Reference statistics for z-scoring. Built from a corpus."""
+    """Reference statistics for z-scoring. Built from a corpus.
+
+    Words with no variance in the reference corpus are EXCLUDED, not floored.
+    Flooring them at a tiny epsilon was a real bug: on a small corpus many
+    function words ("she", "his", "him") never appear at all, so their sd was
+    zero. Dividing by 1e-9 gave any outside document that used one a z-score
+    near a million, which swamped the whole distance. In-corpus documents never
+    triggered it, so in-sample testing could not see it.
+    """
     means: Dict[str, float]
     sds: Dict[str, float]
+    active: List[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.active:
+            self.active = [w for w in FUNCTION_WORDS
+                           if self.sds.get(w, 0.0) >= SD_FLOOR]
 
     @classmethod
     def fit(cls, profiles: Sequence[Profile]) -> "DeltaModel":
@@ -99,30 +119,35 @@ class DeltaModel:
         for w in FUNCTION_WORDS:
             vals = [p.function_freqs.get(w, 0.0) for p in profiles]
             means[w] = mean(vals)
-            sds[w] = stdev(vals) or 1e-9
+            sds[w] = stdev(vals)
         return cls(means, sds)
 
     def zscores(self, p: Profile) -> Dict[str, float]:
         return {w: (p.function_freqs.get(w, 0.0) - self.means[w]) / self.sds[w]
-                for w in FUNCTION_WORDS}
+                for w in self.active}
 
 
 def delta(model: DeltaModel, a: Profile, b: Profile) -> float:
     """Burrows's Delta: mean absolute difference of z-scores. Lower = closer."""
     za, zb = model.zscores(a), model.zscores(b)
-    return mean([abs(za[w] - zb[w]) for w in FUNCTION_WORDS])
+    if not model.active:
+        return 0.0
+    return mean([abs(za[w] - zb[w]) for w in model.active])
 
 
 def centroid(model: DeltaModel, profiles: Sequence[Profile]) -> Dict[str, float]:
     """Mean z-score vector of a class."""
     zs = [model.zscores(p) for p in profiles]
-    return {w: mean([z[w] for z in zs]) for w in FUNCTION_WORDS}
+    return {w: mean([z[w] for z in zs]) for w in model.active}
 
 
 def delta_to_centroid(model: DeltaModel, p: Profile,
                       cent: Dict[str, float]) -> float:
     z = model.zscores(p)
-    return mean([abs(z[w] - cent[w]) for w in FUNCTION_WORDS])
+    shared = [w for w in model.active if w in cent]
+    if not shared:
+        return 0.0
+    return mean([abs(z[w] - cent[w]) for w in shared])
 
 
 class NearestCentroid:
@@ -225,7 +250,7 @@ def analyse(doc: Document) -> List["Signal"]:
     if cents is None or doc.word_count < 200:
         return [Signal("stylometry.burrows_delta", "stylometry", 0.0, [], 0.0)]
 
-    model = DeltaModel(cents["means"], cents["sds"])
+    model = DeltaModel(cents["means"], cents["sds"], cents.get("active", []))
     p = profile(doc)
     dh = delta_to_centroid(model, p, cents["human_centroid"])
     dm = delta_to_centroid(model, p, cents["machine_centroid"])
