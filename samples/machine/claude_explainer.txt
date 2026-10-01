@@ -1,0 +1,21 @@
+Let me reframe the question slightly, because I think the useful answer is a bit different from what was asked.
+
+You're asking how database indexes make queries faster. The short version is that an index is a separate, sorted data structure that lets the database skip reading most of the table. But the interesting part is what that costs you, which is where most of the practical decisions actually live.
+
+Here's the thing: without an index, answering "find the row where email = x" means reading every row in the table and checking. That's a sequential scan, and it's O(n). With a B-tree index on that column, the database holds a sorted structure where it can binary-search down to the matching entry in roughly O(log n) steps, then follow a pointer to the actual row.
+
+That said, the picture is more nuanced than "indexes make things fast."
+
+Worth noting: every index you add has to be maintained. On every insert, update, and delete that touches the indexed column, the database must also update the index structure. A table with eight indexes pays that cost eight times on every write. I should note that this is why write-heavy tables are usually indexed sparingly, while read-heavy reporting tables can carry many more.
+
+There's also a subtlety around selectivity. An index on a boolean column is often useless, because roughly half the rows match either value, and reading half the table through index lookups is slower than just scanning it directly. The query planner knows this and will frequently ignore such an index entirely.
+
+To be fair, there are cases where a low-selectivity index does help, particularly partial indexes that cover only the rare value.
+
+A few things stand out as practical guidance:
+
+- Index columns you filter and join on, not columns you merely select.
+- Composite index column order matters, because the index is only usable from the leftmost column rightward.
+- Measure before and after with the actual query planner output rather than reasoning about it abstractly.
+
+Ultimately, the mental model that serves best is that an index trades write throughput and storage for read speed. Every indexing decision is a position on that tradeoff, and the right position depends entirely on your workload.

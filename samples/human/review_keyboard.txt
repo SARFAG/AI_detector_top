@@ -1,0 +1,15 @@
+I've had this keyboard for eight months now so I think I can actually say something useful about it rather than the usual first-week enthusiasm.
+
+Short version: good keyboard, bad software, and the price is silly.
+
+The switches are the reason to buy it. They're linear, 45g, and they feel genuinely excellent — smooth all the way down, no scratchiness even now after what must be a couple million keystrokes. I've typed on a lot of boards and these are top three easily. Sound is a bit high-pitched out of the box but a sheet of foam under the plate fixed that in about ten minutes.
+
+The build is fine. Aluminium case, heavy enough that it doesn't move, slight flex in the middle of the plate that I notice maybe once a week and that no normal person would care about.
+
+Now the software. God. It's an Electron app that takes nine seconds to launch, requires an account — an account! to remap keys on a keyboard I own! — and it has lost my layout twice. Twice. Once after a firmware update that I didn't ask for and couldn't decline. I now keep my layout in a text file and re-enter it by hand when the app eats it, which is not a sentence anyone should have to write in 2024.
+
+Battery: about three weeks with the lights off, four days with them on. The lights are pointless, turn them off.
+
+Is it worth £200? No. Honestly no. There's a board at half the price with the same switches and firmware you can actually control. I like this one and I'm keeping it, but I got it on sale and I'd have been annoyed at full price.
+
+Buy it if you specifically want these switches and you're prepared to fight the software. Otherwise look at the cheaper stuff first.

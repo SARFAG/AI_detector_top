@@ -1,0 +1,20 @@
+ok so I finally figured this out after like 6 hours and I want to write it down before I forget.
+
+Background: we have a Rails app, Postgres 14, and for about two weeks we'd been seeing random 500s on one endpoint. Maybe 1 in 400 requests. Not enough to page anyone, just enough to be annoying. The error was a connection timeout from the pool.
+
+First thing I did was the obvious thing, bumped the pool size. 5 -> 15. Didn't help. Bumped it to 25. Still didn't help, and now memory was worse. Classic.
+
+Then I spent a whole afternoon convinced it was pgbouncer. It wasn't pgbouncer. I want that afternoon back.
+
+What it actually was: we had a before_action that called out to a third party API to check feature flags. No timeout set on the HTTP client. Default Net::HTTP timeout is 60 seconds. So when their API got slow — which, surprise, it did, intermittently — the request would just sit there holding a database connection the whole time. Enough of those at once and the pool is exhausted and everything else 500s.
+
+The fix was two lines. Set an open_timeout and a read_timeout of 2 seconds, and move the flag check out of the before_action so it doesn't hold a connection. Error rate went to zero immediately.
+
+Lessons, I guess:
+- every http client gets a timeout, no exceptions, I don't care how reliable you think the service is
+- "the pool is exhausted" tells you nothing about *why* it's exhausted, go look at what's holding connections
+- I should have looked at the actual stack trace on day one instead of pattern-matching to "pool too small". The trace had the third party call right there in it. Four hours of my life.
+
+Anyway. Hope this helps someone. If you're seeing random pool timeouts, go check what external calls happen inside your request cycle before you touch any config.
+
+edit: a few people asked which flag service. It's not really their fault, we were using it wrong, so I'd rather not name them. The point stands for any external call.
