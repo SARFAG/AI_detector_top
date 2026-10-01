@@ -126,6 +126,25 @@ class TestLexical(unittest.TestCase):
         sigs = {s.name: s for s in lexical.analyse(doc)}
         self.assertGreater(sigs["lexical.negative_parallelism"].logodds, 0)
 
+    def test_human_marker_evidence_scales_with_volume(self):
+        """Regression: one marker bought a third of the cap.
+
+        lexical.human_markers fires on a single corpus document, so its
+        accuracy rested on one observation while carrying the highest negative
+        weight in the package. A lone "this morning" in 760 words contributed
+        -0.89 on a document whose other evidence pointed the other way.
+        """
+        base = ("The handler validates each payload before the worker commits "
+                "it to the registry in declaration order. ") * 30
+        one = lexical._human_markers(parse("This morning " + base))
+        many = lexical._human_markers(parse(
+            "This morning, tbh, anyway, my boss said lol. " + base))
+        self.assertGreater(one.logodds, -0.6,
+                           "a single marker must not carry near-cap weight")
+        self.assertLess(many.logodds, one.logodds,
+                        "more markers must mean more evidence")
+        self.assertGreaterEqual(many.logodds, -2.0)
+
     def test_human_markers_push_negative(self):
         doc = parse("tbh idk, my boss said whatever and anyway I kinda gave up lol")
         sigs = {s.name: s for s in lexical.analyse(doc)}

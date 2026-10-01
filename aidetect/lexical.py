@@ -150,10 +150,19 @@ def _human_markers(doc: Document) -> Signal:
         return Signal("lexical.human_markers", "lexical", 0.0, [], 0.0)
     per_1k = len(matches) * 1000.0 / max(doc.word_count, 1)
     uniq = sorted({m.lower() for m in matches})
+    # Volume-scaled, for the same reason as forensics.smart_quotes.
+    #
+    # This signal fires on exactly one document in the shipped corpus, so its
+    # perfect accuracy rests on a single observation, and its cap was the
+    # highest of any negative signal here. A lone "this morning" in 760 words
+    # bought -0.89, over a third of that cap, on a document whose other
+    # evidence pointed the other way. Raising the midpoint from 2.0 to 4.0 and
+    # trimming the cap makes a single marker suggestive rather than decisive,
+    # while two or more still carry real weight.
     return Signal(
         name="lexical.human_markers",
         layer="lexical",
-        logodds=-saturating((len(matches) + per_1k) / 2.0, 2.0, 2.4),
+        logodds=-saturating((len(matches) + per_1k) / 2.0, 4.0, 2.0),
         evidence=[f"'{u}'" for u in uniq[:6]],
         detail=float(len(matches)),
     )
