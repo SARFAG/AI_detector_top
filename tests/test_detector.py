@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import aidetect
 from aidetect import code as code_layer
-from aidetect import forensics, lexical, stance, statistical, syntax
+from aidetect import forensics, lexical, stance, statistical, structural, syntax
 from aidetect.detector import analyse, analyse_segments, fraction_ai
 from aidetect.lexical import _RX_HUMAN
 from aidetect.text import parse, split_sentences
@@ -412,10 +412,25 @@ class TestRegressionMarkerFreeSpec(unittest.TestCase):
                            f"regressed on the marker-free spec: {rep.probability:.3f}")
 
     def test_lexical_layer_is_still_blind_to_it(self):
-        """Documents why the new layers were needed: the old ones find nothing."""
+        """Documents why the new layers were needed: vocabulary finds nothing.
+
+        The structural layer WAS also blind when this regression was written.
+        It no longer is: structural.identifier_dispersion, added later from a
+        matched-pair analysis, catches this document. So the assertion now
+        covers only the lexical layer, and pins the structural contribution as
+        coming from dispersion rather than from the original four signals.
+        """
         rep = analyse(self.text)
         self.assertEqual(rep.layer_totals.get("lexical", 0.0), 0.0)
-        self.assertEqual(rep.layer_totals.get("structural", 0.0), 0.0)
+        by_name = {s.name: s.logodds for s in rep.signals}
+        for original in ("structural.mandatory_conclusion",
+                         "structural.section_density",
+                         "structural.answer_shape",
+                         "structural.section_balance"):
+            self.assertEqual(by_name.get(original, 0.0), 0.0,
+                             f"{original} was blind to this document and "
+                             f"should still be")
+        self.assertGreater(by_name.get("structural.identifier_dispersion", 0.0), 0.0)
 
     def test_carried_by_syntax_and_stance(self):
         rep = analyse(self.text)
@@ -473,6 +488,50 @@ class TestFormattingInvariance(unittest.TestCase):
         """The invariant must not be a one-way ratchet toward 'machine'."""
         human = read(os.path.join(SAMPLES, "human", "forum_debugging.txt"))
         self.assertLess(analyse(self._markdownify(human)).probability, 0.5)
+
+
+class TestIdentifierDispersion(unittest.TestCase):
+    """Found by diffing a matched pair - same feature request, 35 of 36
+    identifiers shared, one written by a model and one by a person."""
+
+    def test_non_technical_prose_is_skipped(self):
+        text = ("I went to the shop and they were out of the thing I wanted. " * 8
+                + "\n\n" + "So I bought a different one and it was fine. " * 8
+                + "\n\n" + "That is pretty much the whole story really. " * 8
+                + "\n\n" + "Nothing else happened worth writing down here. " * 8)
+        self.assertEqual(structural._identifier_dispersion(parse(text)).logodds, 0.0)
+
+    def test_interleaved_identifiers_read_machine(self):
+        para = ("The HandlerConfig validates each request_payload before the "
+                "WorkerPool commits it to the record_store in order. ")
+        text = "\n\n".join([para * 3] * 5)
+        sig = structural._identifier_dispersion(parse(text))
+        self.assertGreater(sig.logodds, 0.4)
+        self.assertAlmostEqual(sig.detail, 1.0, places=6)
+
+    def test_clustered_identifiers_read_human(self):
+        prose = ("I ran into this last week and it cost me most of a day to "
+                 "work out what had gone wrong with the whole thing. ")
+        tech = ("The HandlerConfig and request_payload and WorkerPool and "
+                "record_store and MetadataWriter all need changing here. ")
+        text = "\n\n".join([prose * 3] * 5 + [tech * 3])
+        sig = structural._identifier_dispersion(parse(text))
+        self.assertLess(sig.logodds, -0.3)
+        self.assertLess(sig.detail, 0.5)
+
+    def test_matched_pair_separates(self):
+        """The pair this signal came from must stay separated."""
+        human = read(os.path.join(SAMPLES, "human", "spec_goose_request.txt"))
+        machine = read(os.path.join(SAMPLES, "machine", "spec_cross_mission.txt"))
+        h = structural._identifier_dispersion(parse(human))
+        m = structural._identifier_dispersion(parse(machine))
+        self.assertLess(h.logodds, 0)
+        self.assertGreater(m.logodds, 0)
+
+    def test_needs_enough_paragraphs(self):
+        sig = structural._identifier_dispersion(
+            parse("The HandlerConfig uses request_payload here now today."))
+        self.assertEqual(sig.logodds, 0.0)
 
 
 class TestSegmentation(unittest.TestCase):

@@ -36,6 +36,7 @@ def analyse(doc: Document) -> List[Signal]:
         _section_density(doc),
         _answer_shape(doc),
         _balanced_sections(doc),
+        _identifier_dispersion(doc),
     ]
 
 
@@ -117,3 +118,61 @@ def _balanced_sections(doc: Document) -> Signal:
                       [f"section lengths unusually even (CV={cv:.2f}, n={len(blocks)})"], cv)
     return Signal("structural.section_balance", "structural", 0.0,
                   [f"section length CV={cv:.2f}"], cv)
+
+
+# Code identifiers: CamelCase and snake_case.
+_IDENT = re.compile(r"\b[A-Z][a-zA-Z]*[A-Z][a-zA-Z]*\b|\b[a-z]+_[a-z_]+\b")
+
+# Below this identifier rate the document is not technical enough for the
+# measure to mean anything.
+_TECHNICAL_FLOOR = 15.0
+
+
+def _identifier_dispersion(doc: Document) -> Signal:
+    """Are technical identifiers spread through the document or clustered?
+
+    Found by diffing a matched pair: the same feature request written once by
+    a model and once by a person, sharing 35 of 36 identifiers. The content was
+    the same; the placement was not.
+
+    The person wrote six paragraphs of plain prose about the problem, then put
+    every API name in one bolt-on section at the end, introduced as "to make
+    this concrete, the names I'd go with". The model interleaved names through
+    nearly every paragraph. People separate *what I want* from *what to call
+    it*; models treat naming as part of each requirement.
+
+    Measured as the fraction of substantial paragraphs containing at least one
+    identifier:
+
+        human technical prose     0.25, 0.29
+        machine technical prose   0.88, 1.00, 1.00, 1.00, 1.00, 1.00
+
+    Only two human documents support the low end, so the weight is kept
+    modest despite the clean gap. Applies only to technical text; prose with
+    no identifiers is skipped entirely.
+    """
+    paras = [p for p in doc.paragraphs if len(tokenize_words(p)) >= 20]
+    if len(paras) < 4:
+        return Signal("structural.identifier_dispersion", "structural", 0.0, [], 0.0)
+
+    ident_rate = len(_IDENT.findall(doc.prose)) * 1000.0 / max(doc.word_count, 1)
+    if ident_rate < _TECHNICAL_FLOOR:
+        return Signal("structural.identifier_dispersion", "structural", 0.0,
+                      [f"not technical enough to measure ({ident_rate:.0f} "
+                       f"identifiers per 1k)"], 0.0)
+
+    with_ids = sum(1 for p in paras if _IDENT.search(p))
+    dispersion = with_ids / len(paras)
+
+    ev = [f"{with_ids}/{len(paras)} paragraphs carry identifiers "
+          f"(dispersion {dispersion:.2f}, {ident_rate:.0f} per 1k)"]
+    if dispersion >= 0.85:
+        lo = min((dispersion - 0.85) * 2.0 + 0.45, 0.6)
+        ev.append("identifiers interleaved throughout")
+    elif dispersion <= 0.50:
+        lo = -min((0.50 - dispersion) * 1.6 + 0.30, 0.6)
+        ev.append("identifiers clustered into a few sections")
+    else:
+        lo = 0.0
+    return Signal("structural.identifier_dispersion", "structural", lo, ev,
+                  dispersion)

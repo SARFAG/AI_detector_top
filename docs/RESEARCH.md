@@ -415,3 +415,85 @@ documents, one of which is the spec itself. The *direction* and *mechanism* of
 both new features are principled and I would expect them to hold; the exact
 constants are not trustworthy and should be re-fit with `aidetect.calibrate` on
 a real corpus before anyone relies on the magnitudes.
+
+
+---
+
+## 15. The matched pair
+
+The most informative document in this corpus is a *pair*: the same feature
+request for the `goose` migration tool, written once by a model and once by a
+person, the human one confirmed by passing an independent production detector.
+They share **35 of 36 identifiers**. Same four states, same result struct, same
+option functions, same storage scheme. The content is not in dispute, so every
+difference is in the writing.
+
+### What separated them, measured
+
+| | AI | human |
+|---|---|---|
+| paragraph length CV | 0.33 | **0.70** |
+| paragraph word counts | 68,117,108,79,69,78,67,34 | 64,**21**,**9**,84,121,42,**160**,80 |
+| typographic irregularities | **0** | `it's/its` confusion, trailing whitespace |
+| sentence length CV | 0.49 | 0.60 |
+| authorial presence per 1k | 6.5 | 12.0 |
+
+The human has a 9-word paragraph next to a 160-word one - a throwaway line,
+then the part they actually cared about. And `it's applied status` is a
+grammar confusion rather than a typo, which models essentially never produce.
+That error type was added to the irregularity list as a result.
+
+### The structural difference, which was new
+
+Distinct identifiers per paragraph:
+
+```
+AI     [0,  2, 14,  2,  5,  1,  8,  3]    spread across 7 of 8
+human  [0,  0,  0,  0,  0,  0, 22,  9]    quarantined into the last 2
+```
+
+The person wrote six paragraphs of plain prose about the problem, then put
+every API name into one bolt-on section introduced as *"to make this concrete,
+the names I'd go with"*. The model interleaved naming through nearly every
+paragraph.
+
+People separate **what I want** from **what to call it**. Models treat naming
+as part of each requirement. Measured across every technical document in the
+corpus:
+
+```
+human technical prose     0.25, 0.29       fraction of paragraphs with identifiers
+machine technical prose   0.88, 1.00, 1.00, 1.00, 1.00, 1.00
+```
+
+Shipped as `structural.identifier_dispersion`, gated to documents with at
+least 15 identifiers per 1k words and four substantial paragraphs, and
+weighted modestly because only two human documents support the low end.
+
+### Two candidates from the same analysis that were rejected
+
+**Declarative-vs-request stance.** The model writes specification
+(*"`MigrationStatus` gains `AppliedChecksum`"*), the person writes request
+(*"I would really like goose to be able to..."*). Striking on the pair - 24.2
+vs 10.3 declaratives per 1k - and it does not survive the corpus: one machine
+document scores -10.0, below every human. Rejected.
+
+**Backtick/markup consistency.** The AI version wrapped all 136 identifier
+occurrences in backticks and used no lists; the human used lists and not one
+backtick. Rejected on principle rather than measurement: it is pure
+presentation, and `TestFormattingInvariance` exists precisely to keep
+presentation out of the scoring. The same document reformatted must not score
+differently.
+
+### Effect
+
+Matched-pair separation went from 60 to 71 points (AI 84.2%, human 13.1%), and
+the corpus margin from 79.0 to 85.4.
+
+### Why pairs are worth more than documents
+
+Every other comparison in this corpus confounds authorship with topic, genre
+and length - a blog post against an SEO article differs in far more than who
+wrote it. A matched pair holds all of that constant, so the remaining
+difference is the thing being measured. **One matched pair taught this project
+more than the preceding six documents.**
