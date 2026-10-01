@@ -152,15 +152,53 @@ python3 -m aidetect.calibrate --human corpus/human --machine corpus/machine
 Collect ~200 documents per class from your own domain first. Below that you are
 fitting noise, and the tool will say so.
 
+## Evaluation
+
+```bash
+python3 -m aidetect.evaluate --human samples/human --machine samples/machine --ablate
+```
+
+Reports AUROC with bootstrap CI, a permutation test **and its own floor**,
+FPR at fixed TPR, log loss, separation margin, calibration error, and a
+leave-one-out ablation. It also prints what is wrong with its own numbers:
+
+```
+!! LEAVE-ONE-OUT HERE IS NOT FULLY HONEST.
+   It refits the logistic weights without each document, but the FEATURE
+   DEFINITIONS were hand-tuned on the whole corpus and are not re-derived
+   per fold.
+
+!! The bootstrap interval is degenerate (lo == hi). With perfect separation
+   and small n, every resample also separates perfectly, so the interval
+   collapses. Read that as the bootstrap being unable to express uncertainty
+   here, NOT as precision.
+```
+
+Current result on 7 documents: AUROC 1.000 in-sample and out-of-sample,
+overfitting gap 0.0000, permutation p=0.0288 against a floor of 0.0286 — i.e.
+the best p-value this sample size can produce, which is a statement about the
+corpus, not the detector.
+
+Ablation ranks by log loss, because AUROC saturates at 1.0 and returns a column
+of zeros:
+
+| signal | log-loss cost |
+|---|---|
+| `syntax.template_repetition` | **+0.0520** |
+| `statistical.burstiness` | +0.0198 |
+| `stance.authorial_absence` | +0.0139 |
+| `lexical.tier1_register` | +0.0061 |
+
 ## Tests
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-35 tests: layer unit tests, crash-resistance on hostile Unicode, two regression
-tests for bugs found during development, and an end-to-end separation test that
-asserts a margin between the human and machine sample sets.
+69 tests: layer unit tests, metric tests against hand-computed values,
+crash-resistance on hostile Unicode, regression tests for every bug found
+during development, formatting-invariance tests, and an end-to-end separation
+test that asserts a margin between the human and machine sample sets.
 
 ```
 human max       4.4%
