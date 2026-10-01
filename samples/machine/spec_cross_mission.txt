@@ -1,0 +1,54 @@
+A WP can't wait on another mission's work, and two missions can claim the same file and both finalize -> add blocked_by, cross-mission ownership checks, and one repo-wide audit.
+
+Declaring a wait
+
+blocked_by goes on WP frontmatter; an entry is <mission handle>/<WP id>, or a bare mission handle meaning every WP of that mission.
+Handles are ones the repository resolves; whitespace in an entry, or anything off those two forms, is malformed.
+Not a list -> one entry.
+Entries come back as written, never split, trimmed or stringified, so a value JSON can hold stays unconverted and one it can't (a date) becomes text.
+Satisfied once its WPs are done, or operator-canceled with provenance; a synthetic cancellation isn't enough.
+What finalizing reports
+
+An entry that won't resolve fails it: error_code INVALID_CROSS_MISSION_BLOCKERS, each offender in invalid_blockers by wp_id, ref and a reason: malformed, mission_not_found, self_mission, wp_not_found.
+Otherwise every entry still appears in cross_mission_blockers with wp_id, ref, mission_slug, blocking_wp_id, satisfied, unsatisfied_wps.
+blocking_wp_id is null for a bare handle; unsatisfied_wps holds sorted bare WP ids.
+Unsatisfied on its own -> no failure.
+Overlapping file claims
+
+Finalizing compares this mission's live WPs' owned_files, lane neither done nor canceled, against other missions' claims, as * and ** glob patterns.
+Two overlap when some path would match both, existing or not: a/*/c.py and a/b/*.py collide over a/b/c.py.
+Exempt: a WP scoped to the whole codebase, and any pair a dependency or entry already orders, either way.
+Each one left adds an ownership_warnings entry plus a cross_mission_ownership_overlaps row of wp_id, owned_file, other_mission, other_wp_id, other_owned_file, authoritative; always sent, empty when none.
+Authoritative when either WP's authoritative_surface equals or prefixes the other's owned_files declaration -> CROSS_MISSION_OWNERSHIP_CONFLICT.
+Nothing starts while an entry is unsatisfied or unresolvable
+
+The WP is not ready, not claimable, not startable.
+spec-kitty implement refuses it, reason cross_mission_blockers_not_satisfied.
+Orchestrator start-implementation -> CROSS_MISSION_BLOCKERS_NOT_SATISFIED, which the contract must permit, offenders in data.unsatisfied_blockers.
+list-ready omits it; so does the auto-claim preview.
+Unforced move into claimed or in_progress -> refused, though forcing still works.
+With dependency gates on, merge gates report a failing cross_mission_blockers gate while a merged WP stays blocked.
+Already in progress -> still resumes.
+Nothing claimable -> selection_reason is cross_mission_blockers_not_satisfied, unless some WP waits only on an ordinary dependency.
+Cycles
+
+dependencies and entries form one graph, so WPs mutually reachable through either are a cyclic group.
+A group holding one of this mission's WPs -> CROSS_MISSION_BLOCKER_CYCLE; a group only in other missions leaves it alone.
+blocker_cycles gives each group one witness, the shortest cycle through its smallest WP of this mission, as <mission slug>/<WP id> strings.
+The audit
+
+spec-kitty doctor cross-mission [--json] [--mission <handle>], repo-wide.
+ownership_overlaps -> those same rows between any two missions plus mission, each pair once, smaller (mission, wp_id) first.
+blockers: a row per entry of every live WP, carrying mission, wp_id, ref, unsatisfied_wps, status.
+Lane blocked WPs whose entries all came good land in releasable_wps with mission, wp_id and blocked_by.
+One witness per cyclic group anywhere goes in blocker_cycles.
+release_waves -> a row per not-started WP: mission, wp_id, wave.
+status is satisfied, waiting or invalid; only invalid rows carry a reason. Lists are there when empty, and without --json each row still prints.
+--mission keeps rows involving that mission: a blocker row its owner and the mission its ref names; a cyclic group every mission holding a WP in it, even one absent from the witness.
+Unresolvable handle -> 2. A reported authoritative overlap, invalid entry or cycle -> 1. Anything else 0, and healthy is true only then.
+Release waves
+
+Prerequisites: a WP's dependencies plus the WPs its entries name.
+A dependency is satisfied at approved, done or operator-canceled; approved never satisfies an entry.
+All prerequisites satisfied -> wave 0. Otherwise one more than the highest unsatisfied prerequisite's wave, counting a started one as 0 and an unstarted one as its own.
+null when a prerequisite won't resolve, was canceled without operator provenance, is itself null-waved, or sits on a cycle.

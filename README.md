@@ -106,6 +106,8 @@ quoted span of input.
 | `statistical` | Burstiness, paragraph uniformity, repetition, connective density | medium / high |
 | `structural` | Mandatory conclusions, answer shape, section balance | low / high |
 | `code` | Docstring uniformity, generic names, absent human traces | medium / medium |
+| `syntax` | Syntactic template repetition, clause uniformity | **high / high** |
+| `stance` | Authorial absence, term invariance, enumeration density | high / medium |
 | `probe` *(optional)* | Binoculars / true perplexity — needs PyTorch | high / high |
 
 Design rules that are enforced in code:
@@ -161,13 +163,33 @@ tests for bugs found during development, and an end-to-end separation test that
 asserts a margin between the human and machine sample sets.
 
 ```
-human max      22.1%
-machine min    84.6%
-margin         62.6 points
+human max       4.4%
+machine min    95.2%
+margin         90.8 points   (in-sample - see below)
 ```
 
-Six samples is a sanity check, not an evaluation. For real numbers, build a
-corpus and use the calibrator.
+Seven samples is a sanity check, not an evaluation, and that margin is
+**in-sample**: the `syntax.template_repetition` midpoint was fit to these
+documents. For real numbers, build a corpus and use the calibrator.
+
+### The feature that matters most
+
+`syntax.template_repetition` abstracts every token to a shape class and measures
+what share of 5-token *templates* recur — catching parallelism that word-level
+n-grams cannot see, because the vocabulary differs while the construction
+repeats. Measured on fixed 200-word windows so it is not a length detector in
+disguise.
+
+| | windowed template repeat-share |
+|---|---|
+| human samples | 2.6–6.4% |
+| machine samples | 13.8–19.9% |
+
+Over 2x separation with no overlap. It was added after the detector missed a
+machine-written technical specification that had zero register markers, zero
+Unicode artifacts and zero structural tells — see
+[docs/RESEARCH.md §11–14](docs/RESEARCH.md) for that failure case and what it
+taught.
 
 ## Honest limitations
 

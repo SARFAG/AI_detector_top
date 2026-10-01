@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from . import code as code_layer
-from . import forensics, lexical, prompts, statistical, structural
+from . import forensics, lexical, prompts, stance, statistical, structural, syntax
 from .signals import Signal, sigmoid
 from .text import Document, parse
 
@@ -39,6 +39,12 @@ LAYER_WEIGHTS = {
     "structural": 0.70,
     "code": 0.90,
     "prompt": 0.60,
+    # Added after the detector missed a machine-written specification that was
+    # invisible to every vocabulary-based layer. These measure form and
+    # authorial presence rather than word choice, so they survive the terse,
+    # marker-free register that defeated the original ensemble.
+    "syntax": 0.95,
+    "stance": 0.95,
 }
 
 BANDS = [
@@ -122,6 +128,8 @@ def analyse(text: str, include_prompt_layer: bool = True) -> Report:
     signals += statistical.analyse(doc)
     signals += structural.analyse(doc)
     signals += code_layer.analyse(doc)
+    signals += syntax.analyse(doc)
+    signals += stance.analyse(doc)
     if include_prompt_layer:
         signals += prompts.analyse(doc)
 
@@ -194,3 +202,39 @@ def analyse_segments(text: str, window: int = 3) -> List[Tuple[str, float]]:
         rep = analyse(chunk)
         out.append((chunk, rep.probability))
     return out
+
+
+# --------------------------------------------------------------------------
+# Windowed scoring
+# --------------------------------------------------------------------------
+
+WINDOW_WORDS = 250
+WINDOW_STRIDE = 125
+
+
+def fraction_ai(text: str, window: int = WINDOW_WORDS,
+                stride: int = WINDOW_STRIDE, threshold: float = 0.5):
+    """Score overlapping fixed-width windows; return (fraction, per-window scores).
+
+    A single document-level number is dominated by whichever register covers
+    the most words. Scoring fixed windows and reporting the *fraction* above
+    threshold is both more robust on mixed documents and the shape that
+    production detectors report.
+    """
+    words = text.split()
+    if len(words) < MIN_ANY_WORDS:
+        return 0.0, []
+
+    scores = []
+    step = max(stride, 1)
+    for start in range(0, max(len(words) - window, 0) + 1, step):
+        chunk = " ".join(words[start:start + window])
+        if len(chunk.split()) < MIN_ANY_WORDS:
+            continue
+        scores.append(analyse(chunk).probability)
+        if start + window >= len(words):
+            break
+
+    if not scores:
+        return 0.0, []
+    return sum(p >= threshold for p in scores) / len(scores), scores

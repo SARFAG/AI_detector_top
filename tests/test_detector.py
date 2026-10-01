@@ -11,8 +11,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import aidetect
 from aidetect import code as code_layer
-from aidetect import forensics, lexical, statistical
-from aidetect.detector import analyse, analyse_segments
+from aidetect import forensics, lexical, stance, statistical, syntax
+from aidetect.detector import analyse, analyse_segments, fraction_ai
 from aidetect.lexical import _RX_HUMAN
 from aidetect.text import parse, split_sentences
 
@@ -241,6 +241,106 @@ class TestEndToEndSeparation(unittest.TestCase):
         lo = min(analyse(read(p)).probability for p in self.machine)
         self.assertGreater(lo - hi, 0.25,
                            f"margin too thin: human max {hi:.3f}, machine min {lo:.3f}")
+
+
+class TestSyntaxLayer(unittest.TestCase):
+    """Added after the detector missed a machine-written technical spec."""
+
+    def test_template_repetition_is_length_normalised(self):
+        """Raw repeat-share grows with length; the signal must not just be a
+        length detector."""
+        unit = ("The handler validates the payload before the worker commits "
+                "the record. A reader fetches the entry while a writer locks "
+                "the table. ")
+        short = syntax._template_repetition(parse(unit * 12))
+        long_ = syntax._template_repetition(parse(unit * 48))
+        self.assertLess(abs(short.detail - long_.detail), 12.0,
+                        "repeat-share should be roughly length-invariant")
+
+    def test_parallel_templates_flagged(self):
+        """Same syntactic shape, different vocabulary - invisible to word
+        n-grams, which is the whole point of this layer."""
+        text = ("The parser rejects the token when the buffer exceeds the limit. "
+                "The loader discards the record when the cursor passes the bound. "
+                "The writer blocks the commit when the journal reaches the cap. "
+                "The reader drops the frame when the window crosses the edge. "
+                "The worker halts the batch when the counter breaks the ceiling. "
+                "The monitor flags the span when the latency tops the target. ") * 5
+        sig = syntax._template_repetition(parse(text))
+        self.assertGreater(sig.logodds, 0.4)
+
+    def test_short_text_yields_nothing(self):
+        for sig in syntax.analyse(parse("Three short words here.")):
+            self.assertEqual(sig.logodds, 0.0)
+
+
+class TestStanceLayer(unittest.TestCase):
+    def test_authorial_absence_needs_length(self):
+        sig = stance._authorial_absence(parse("No pronouns appear in this line."))
+        self.assertEqual(sig.logodds, 0.0)
+
+    def test_authorial_presence_credits_human(self):
+        text = ("I spent the whole day on this and I am still not sure it is "
+                "right. You might disagree, and honestly maybe you should. "
+                "TODO: check with the team before we ship it. ") * 10
+        sig = stance._authorial_absence(parse(text))
+        self.assertLess(sig.logodds, 0)
+
+    def test_authorless_long_text_flagged(self):
+        text = ("The handler validates each payload. The worker commits the "
+                "record once validation passes. Entries resolve against the "
+                "registry. Unresolved entries fail the batch. ") * 14
+        sig = stance._authorial_absence(parse(text))
+        self.assertGreater(sig.logodds, 0.6)
+
+
+class TestWindowedFraction(unittest.TestCase):
+    def test_fraction_bounded_and_consistent(self):
+        text = read(os.path.join(SAMPLES, "machine", "seo_article.txt"))
+        frac, scores = fraction_ai(text)
+        self.assertGreaterEqual(frac, 0.0)
+        self.assertLessEqual(frac, 1.0)
+        self.assertTrue(scores)
+        self.assertAlmostEqual(
+            frac, sum(p >= 0.5 for p in scores) / len(scores), places=6)
+
+    def test_short_text_returns_empty(self):
+        frac, scores = fraction_ai("too short to window")
+        self.assertEqual(frac, 0.0)
+        self.assertEqual(scores, [])
+
+
+class TestRegressionMarkerFreeSpec(unittest.TestCase):
+    """Regression for a real miss.
+
+    A 658-word machine-written technical specification scored 42% -
+    'inconclusive' - because it had zero register markers, zero Unicode
+    artifacts and zero structural tells. Every vocabulary-based layer was
+    blind to it. The syntax and stance layers exist because of this document.
+    """
+
+    def setUp(self):
+        self.text = read(os.path.join(SAMPLES, "machine", "spec_cross_mission.txt"))
+
+    def test_now_detected(self):
+        rep = analyse(self.text)
+        self.assertGreater(rep.probability, 0.75,
+                           f"regressed on the marker-free spec: {rep.probability:.3f}")
+
+    def test_lexical_layer_is_still_blind_to_it(self):
+        """Documents why the new layers were needed: the old ones find nothing."""
+        rep = analyse(self.text)
+        self.assertEqual(rep.layer_totals.get("lexical", 0.0), 0.0)
+        self.assertEqual(rep.layer_totals.get("structural", 0.0), 0.0)
+
+    def test_carried_by_syntax_and_stance(self):
+        rep = analyse(self.text)
+        self.assertGreater(rep.layer_totals.get("syntax", 0.0), 0.5)
+        self.assertGreater(rep.layer_totals.get("stance", 0.0), 0.5)
+
+    def test_all_windows_flagged(self):
+        frac, _ = fraction_ai(self.text)
+        self.assertEqual(frac, 1.0)
 
 
 class TestSegmentation(unittest.TestCase):

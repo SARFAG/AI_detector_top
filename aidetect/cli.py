@@ -13,7 +13,7 @@ import json
 import sys
 from typing import List
 
-from .detector import Report, analyse, analyse_segments
+from .detector import Report, analyse, analyse_segments, fraction_ai
 
 BAR_WIDTH = 40
 
@@ -106,6 +106,8 @@ def main(argv: List[str] | None = None) -> int:
     ap.add_argument("--all", action="store_true", help="show every signal")
     ap.add_argument("--segments", action="store_true",
                     help="score paragraph windows to localise machine-written spans")
+    ap.add_argument("--fraction", action="store_true",
+                    help="also score fixed windows and report the fraction above threshold")
     ap.add_argument("--threshold", type=float, default=None,
                     help="exit 1 if probability >= THRESHOLD (for CI gates)")
     args = ap.parse_args(argv)
@@ -146,14 +148,23 @@ def main(argv: List[str] | None = None) -> int:
             continue
 
         report = analyse(text)
+        frac = None
+        if args.fraction:
+            frac, win = fraction_ai(text)
         if args.threshold is not None and report.probability >= args.threshold:
             exceeded = True
         if args.json:
             d = report_to_dict(report)
             d["path"] = path
+            if frac is not None:
+                d["fraction_ai"] = round(frac, 4)
+                d["window_scores"] = [round(p, 4) for p in win]
             results.append(d)
         else:
             print(format_report(report, path, show_all=args.all))
+            if frac is not None:
+                print(f"  fraction of windows scored machine : {frac:.0%} "
+                      f"({len(win)} windows of {len(text.split())} words)")
             print()
 
     if args.json:

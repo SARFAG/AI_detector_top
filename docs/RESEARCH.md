@@ -323,3 +323,95 @@ point of it can be traced to a quoted span of the input.
 
 Layers 0–4 are pure Python with zero dependencies and run anywhere. Layer 5 is
 where real accuracy comes from and is intentionally pluggable.
+
+---
+
+## 11. Addendum: the marker-free failure case
+
+The detector described above **missed** a 658-word machine-written technical
+specification, scoring it 42% — "inconclusive". An independent production
+detector scored the same text `fractionAi: 1.0`, prediction `AI`. The miss is
+worth documenting because the reason generalises.
+
+### Why every original layer was blind
+
+| Layer | Found | Why |
+|---|---|---|
+| lexical | **nothing** | Not one register marker. No *delve/crucial/robust*, no "it's worth noting", no assistant leakage, no negative parallelism. |
+| forensics | almost nothing | ASCII `->` not `→`. Straight apostrophes. No NBSP, no markdown — headers were bare lines. |
+| structural | **nothing** | No `#` headings to count, no "In conclusion", no answer shape. |
+| statistical | net *human* | Sentence burstiness sat on the neutral midpoint; zero connectives was being scored as human evidence. |
+
+The text was terse, identifier-dense specification prose. That register strips
+out every surface feature the original ensemble measured. **The failure mode is
+genre, not model quality** — any sufficiently compressed technical register
+defeats vocabulary-based detection.
+
+A secondary lesson: a human reading it (including the author of this file)
+judged it *more* likely human, reasoning that its high information density and
+lack of redundancy were un-model-like. That reasoning was wrong. Low redundancy
+indicates a human author in **narrative or argumentative** prose, where a model's
+padding instinct shows. It indicates nothing in **reference/spec** prose, where
+the model is transcribing a structured requirement set and compression is the
+genre norm. Applying a narrative-genre intuition to reference-genre text is what
+produced the wrong call.
+
+### What actually separates it (§12, §13)
+
+Two new families, both measuring *form* rather than *vocabulary*, so they
+survive a marker-free register.
+
+## 12. Syntactic template repetition — the strongest single feature found
+
+Abstract every token to a shape class (function words kept literal, everything
+else → `<w>`, `<ID>`, `<Cap>`, `<CAPS>`), then measure what share of 5-token
+templates recur. Word-level n-grams cannot see this: the vocabulary differs
+while the construction repeats.
+
+Measured on fixed 200-word windows, because raw repeat-share grows with document
+length and would otherwise be a length detector in disguise.
+
+| | windowed 5-gram template repeat-share |
+|---|---|
+| human samples | 2.6%, 4.1%, 6.4% |
+| machine samples | 13.8%, 14.8%, 19.9% |
+| the missed spec | **17.9%** |
+
+Over 2x separation, no overlap, and the widest margin of any single feature in
+this package. The mechanism is principled: models reuse construction patterns
+even when deliberately varying word choice.
+
+Variants tested and rejected — collapsing function words to a single class
+(gap 5.9), 4-grams (gap 4.0), 6-grams (gap 7.3). Keeping function words literal
+at n=5 gave the cleanest split.
+
+## 13. Authorial presence
+
+A human writing 650 words of anything almost always leaves themselves in it: a
+pronoun, a hedge, an aside, an unresolved question, a TODO. Machine output is
+authorless by default.
+
+| | 1st/2nd person per 1k | meta-commentary |
+|---|---|---|
+| human samples | 39–78 | 0–6.6 |
+| machine samples | 11–38 | 2.7–5.4 |
+| the missed spec | **0.0** | **0.0** |
+
+Measured as an *absence*, which is unusual here and needs care: absence is only
+evidence once the text is long enough for it to be surprising. Gated at 250
+words and scaled with length.
+
+Related, weaker: **term invariance** (people drift between "work package", "WP"
+and "the package"; models lock onto one surface form) and **enumeration
+density** (people write "etc." and trail off; models enumerate the closed set).
+
+## 14. Result and the honest caveat
+
+The missed spec went **42% → 96%**, and every other sample improved; the
+corpus margin went from 62.6 to 90.8 points.
+
+That 90.8 is **in-sample**. The template-repetition midpoint was fit to seven
+documents, one of which is the spec itself. The *direction* and *mechanism* of
+both new features are principled and I would expect them to hold; the exact
+constants are not trustworthy and should be re-fit with `aidetect.calibrate` on
+a real corpus before anyone relies on the magnitudes.

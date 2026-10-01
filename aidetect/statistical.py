@@ -177,9 +177,10 @@ def _transition_density(doc: Document) -> Signal:
     # Natural writing sits around 4-9 per 1k; scaffolded LLM prose runs 15+.
     if per_1k > 11:
         lo = min((per_1k - 11) * 0.09, 1.1)
-    elif per_1k < 2:
-        lo = -0.25
     else:
+        # Previously this credited near-zero connective density as human. That
+        # was wrong: terse machine-written reference prose has no connectives
+        # either, and the credit helped a machine-written spec score as human.
         lo = 0.0
     uniq = Counter(h.lower() for h in hits)
     ev = [f"{per_1k:.1f} connectives per 1k words"]

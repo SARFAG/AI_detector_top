@@ -59,6 +59,19 @@ determined adversary wins, always, and no future version changes that.
   99% machine-generated, because it quotes every marker in the lexicon. Any
   document discussing these markers will trip them.
 
+## 3a. A documented false negative
+
+The detector originally scored a 658-word machine-written technical
+specification at 42% — "inconclusive". It had no register markers, no Unicode
+artifacts and no structural tells; terse identifier-dense spec prose strips out
+everything the vocabulary-based layers measure.
+
+The `syntax` and `stance` layers were added in response and it now scores 96%.
+But the general lesson stands and is not fixed: **compressed technical registers
+defeat surface-feature detection**, and there are certainly other registers that
+do the same which are not yet in the sample corpus. A null result from this tool
+means "no applicable evidence found", never "human".
+
 ## 4. False negatives you should expect
 
 - Short text. Below ~250 words the detector withholds judgement on purpose;
