@@ -178,6 +178,46 @@ print(b.score(text))              # LOW score => machine-generated
 print(b.as_signal(text))          # slots into the normal report
 ```
 
+## Adversarial hardening
+
+Short of labelled data? Attack your own corpus. Each perturbation targets one
+named signal, so when a document flips you know what carried it.
+
+```python
+from aidetect.adversarial import robustness_report, hardening_corpus
+rep = robustness_report(text)          # how much perturbation to flip it
+corpus = hardening_corpus(machine_texts)   # labelled hard negatives
+```
+
+Nine attacks: register neutralisation (the only one touching vocabulary),
+authorial presence, typos, sentence variance, paragraph variance, questions,
+contractions, identifier clustering, markup stripping.
+
+Current result on the machine corpus — all four documents **survive all nine
+attacks applied cumulatively**, and hard-negative recall is 36/36:
+
+```
+spec_cross_mission   98.5% -> 93.8%   survived
+seo_article         100.0% -> 98.7%   survived
+chatgpt_remote_work 100.0% -> 99.8%   survived
+claude_explainer     98.4% -> 93.8%   survived
+```
+
+That is the ensemble's redundancy working: no single layer carries a document,
+so no single attack defeats it. The strongest individual attack moves the
+score 4.1%.
+
+**Do not over-read this.** Every attack here is *mechanical* — surface edits
+and dictionary swaps. A real LLM paraphrase rewrites sentences wholesale,
+changing vocabulary, rhythm, structure and templates coherently and at once.
+Robustness to mechanical perturbation is demonstrated; robustness to semantic
+paraphrase is **untested**, and `docs/LIMITS.md` expects it to fail. Closing
+that gap needs a model in the loop (see `aidetect/rewrite.py`).
+
+Perturbed variants keep the **machine** label: roughening the surface of
+generated text does not make it human-written. They are hard negatives, which
+is exactly what a detector tuned only on clean output gets wrong.
+
 ## Calibrating to your domain
 
 The shipped weights are hand-set priors from the literature, **not** a fit to
