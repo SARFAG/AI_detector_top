@@ -5,3 +5,9 @@ __pycache__/
 venv/
 weights.json
 .DS_Store
+
+# Distribution archives built by `git archive` for download
+aidetect-source.tar.gz
+aidetect-source.zip
+*.tar.gz
+*.zip
