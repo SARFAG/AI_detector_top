@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 import sys
 import unittest
 
@@ -341,6 +342,54 @@ class TestRegressionMarkerFreeSpec(unittest.TestCase):
     def test_all_windows_flagged(self):
         frac, _ = fraction_ai(self.text)
         self.assertEqual(frac, 1.0)
+
+
+class TestFormattingInvariance(unittest.TestCase):
+    """Reformatting must not change the verdict.
+
+    The same machine-written spec was submitted twice, once as plain lines and
+    once with markdown bullets and backticked identifiers. The surface layers
+    moved (markdown_density, section_density, paragraph_uniformity); the
+    form-based layers were bit-identical. That is the property worth enforcing:
+    anything measuring syntactic form should be invariant to presentation,
+    because presentation is the easiest thing in the world to change.
+    """
+
+    @staticmethod
+    def _markdownify(text):
+        out = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                out.append("")
+                continue
+            # Backtick bare identifiers, bullet anything sentence-shaped.
+            line = re.sub(r"\b(\w+_\w+)\b", r"`\1`", line)
+            out.append("* " + line if stripped.endswith(".") else line)
+        return "\n".join(out)
+
+    def setUp(self):
+        self.plain = read(os.path.join(SAMPLES, "machine", "spec_cross_mission.txt"))
+        self.formatted = self._markdownify(self.plain)
+
+    def test_verdict_does_not_flip(self):
+        a = analyse(self.plain).probability
+        b = analyse(self.formatted).probability
+        self.assertGreater(a, 0.5)
+        self.assertGreater(b, 0.5, "reformatting flipped the verdict")
+
+    def test_form_based_layers_are_invariant(self):
+        a = analyse(self.plain)
+        b = analyse(self.formatted)
+        for layer in ("syntax", "stance"):
+            self.assertAlmostEqual(
+                a.layer_totals.get(layer, 0.0), b.layer_totals.get(layer, 0.0),
+                places=6, msg=f"{layer} layer is sensitive to formatting")
+
+    def test_human_text_also_survives_markdownification(self):
+        """The invariant must not be a one-way ratchet toward 'machine'."""
+        human = read(os.path.join(SAMPLES, "human", "forum_debugging.txt"))
+        self.assertLess(analyse(self._markdownify(human)).probability, 0.5)
 
 
 class TestSegmentation(unittest.TestCase):
