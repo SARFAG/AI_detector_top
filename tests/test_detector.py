@@ -83,6 +83,22 @@ class TestForensics(unittest.TestCase):
         sig = forensics._invisible_chars("﻿hello world")
         self.assertEqual(sig.logodds, 0.0)
 
+    def test_mixed_quote_evidence_scales_with_volume(self):
+        """Regression: the mixed rule was a pure ratio with no volume floor.
+
+        Three curly apostrophes beside two straight ones scored +1.25 - on a
+        par with the best validated signals here - and was worth 27 points on
+        one document. The rule had never fired on any corpus document, so
+        nothing caught the miscalibration.
+        """
+        tiny = forensics._smart_quotes("a\u2019b c\u2019d e\u2019f g'h i'j")
+        large = forensics._smart_quotes("x\u2019y " * 40 + "x'y " * 30)
+        self.assertLess(tiny.logodds, 0.45,
+                        "a handful of characters must not carry full weight")
+        self.assertGreater(large.logodds, tiny.logodds * 2,
+                           "more evidence must mean more weight")
+        self.assertLessEqual(large.logodds, 1.5)
+
     def test_mixed_quotes_flagged_higher_than_uniform(self):
         mixed = forensics._smart_quotes('He said “yes” and she said "no".')
         uniform = forensics._smart_quotes('He said “yes” today.')

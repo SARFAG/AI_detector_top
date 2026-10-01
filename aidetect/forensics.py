@@ -141,9 +141,18 @@ def _smart_quotes(raw: str) -> Signal:
     ev = [f"curly x{smart}, straight x{straight}"]
     if straight > 0 and smart > 0:
         # Mixed-signal rule: a human pasted machine text into their own.
+        #
+        # This was a pure ratio with no volume requirement, so three curly
+        # apostrophes beside two straight ones scored +1.25 - as much as the
+        # best validated signals in the package - and moved one document 27
+        # points. The rule had also never fired on any corpus document, so
+        # nothing caught it. The contribution is now scaled by how much
+        # evidence there actually is, not just how evenly it is split.
         ratio = min(smart, straight) / max(smart, straight)
-        lo = 0.5 + 1.0 * ratio
-        ev.append("MIXED curly+straight: likely paste of machine text into human text")
+        volume = saturating(min(smart, straight), 5.0, 1.0)
+        lo = (0.4 + 0.9 * ratio) * volume
+        ev.append(f"MIXED curly+straight (min side {min(smart, straight)}): "
+                  f"possible paste of machine text into human text")
     else:
         lo = saturating(smart, 4.0, 0.9)
         ev.append("uniformly curly: rich-text pipeline or LLM output")
