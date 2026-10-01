@@ -156,7 +156,8 @@ def _sentence_type_mix(doc: Document) -> Signal:
     if nondecl >= 0.24:
         lo = -min((nondecl - 0.24) * 2.5, 0.6)
     elif nondecl <= 0.10:
-        lo = min((0.10 - nondecl) * 4.0, 0.45)
+        from .register import damping as _register_damping
+        lo = min((0.10 - nondecl) * 4.0, 0.45) * _register_damping(doc)
     else:
         lo = 0.0
     return Signal("discourse.sentence_type_mix", "discourse", lo,

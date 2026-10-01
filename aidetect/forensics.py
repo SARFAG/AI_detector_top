@@ -248,10 +248,13 @@ def _typo_absence(doc: Document) -> Signal:
 
     if total == 0:
         scale = min((doc.word_count - 300) / 900.0, 1.0)
+        # Damped on technical prose: a copy-edited specification has no
+        # irregularities whoever wrote it. See aidetect/register.py.
+        from .register import damping as _register_damping
         return Signal(
             name="forensics.typo_absence",
             layer="forensics",
-            logodds=0.20 + 0.70 * scale,
+            logodds=(0.20 + 0.70 * scale) * _register_damping(doc),
             evidence=[f"zero typographic irregularities across {doc.word_count} words"],
             detail=0.0,
         )

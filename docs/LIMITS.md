@@ -113,6 +113,48 @@ regions. A test pins that false positive so it stays visible.
 One document is not a validation set. **Still add more human-written technical
 prose before trusting either verdict on that register.**
 
+## 3c. A confirmed false positive, and what it cost
+
+A second human-written technical specification (`samples/human/spec_dbc_linter.txt`,
+confirmed by passing an independent production detector) scored **88.1%,
+"likely machine-generated", high confidence**. That is a false positive on
+exactly the register section 3b warned about, and it is the clearest evidence
+in this repo that the warning was not theoretical.
+
+**Cause.** Three signals measure *polish and impersonality* rather than
+authorship - absence of first person, absence of questions, absence of typos.
+A technical specification has all three whoever writes it:
+
+```
+                      identifiers/1k   presence/1k   authorial signal
+human blog / review          0            66-89          -0.4 to -0.7
+human goose spec            62            12             +0.41
+human DBC spec              23             0.0           +1.14
+```
+
+**Fix.** `aidetect/register.py` detects technical register by identifier
+density and damps those three signals to 35% there. The document went
+88.1% -> 71.3% -> 60.4%, informal human samples moved by less than 0.3
+points, and machine samples by less than 2.
+
+**It is still wrong.** 60.4% is above the threshold. The remaining evidence is
+diffuse - nothing above +0.40 - and the margin-aware confidence rule now
+reports it as "low" rather than "high", but a human document still scores
+machine-leaning. A test pins both the ceiling and the low confidence so the
+defect stays visible.
+
+**What this cost elsewhere**, recorded honestly: Burrows's Delta no longer
+separates the corpus perfectly (one human document sits at +0.07), and triage
+now calls the machine-written spec `ai_assisted` too. Both were artifacts of a
+corpus with no hard cases in it.
+
+**The windowed views were right and the document-level score was wrong.**
+Triage scored 6 of 11 windows human on this document, `fraction_ai` 1 of 4,
+and the segment scan 1 of 5, while the document score said 88.1%. Every one of
+the damped signals has a length gate and switches off in a 200-word window, so
+windowing had been avoiding the bias by accident. That is worth remembering
+when a view disagrees with the headline number.
+
 ## 4. False negatives you should expect
 
 - Short text. Below ~250 words the detector withholds judgement on purpose;

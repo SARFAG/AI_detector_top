@@ -96,17 +96,34 @@ def _band(p: float) -> str:
     return "inconclusive"
 
 
-def _confidence(word_count: int, signals: List[Signal]) -> str:
+def _confidence(word_count: int, signals: List[Signal],
+                probability: Optional[float] = None) -> str:
+    """Confidence in the verdict, not merely in the amount of evidence.
+
+    Length and signal count were the only inputs, so a 60% score could be
+    reported at "high" confidence - incoherent, since 60% is by definition a
+    marginal verdict. A score near 0.5 now caps the confidence regardless of
+    how many signals fired, which is what the word is supposed to mean.
+    """
     active = sum(1 for s in signals if abs(s.logodds) > 0.1)
     if word_count < MIN_ANY_WORDS:
         return "none"
     if word_count < MIN_RELIABLE_WORDS:
         return "low"
     if active >= 6 and word_count >= 600:
-        return "high"
-    if active >= 3:
-        return "medium"
-    return "low"
+        level = "high"
+    elif active >= 3:
+        level = "medium"
+    else:
+        level = "low"
+
+    if probability is not None:
+        margin = abs(probability - 0.5)
+        if margin < 0.15:
+            level = "low"
+        elif margin < 0.25 and level == "high":
+            level = "medium"
+    return level
 
 
 def _length_shrinkage(word_count: int) -> float:
@@ -153,7 +170,7 @@ def analyse(text: str, include_prompt_layer: bool = True) -> Report:
     total = BASE_LOGODDS + (total - BASE_LOGODDS) * shrink
 
     probability = sigmoid(total)
-    confidence = _confidence(doc.word_count, signals)
+    confidence = _confidence(doc.word_count, signals, probability)
 
     notes: List[str] = []
     if doc.word_count < MIN_ANY_WORDS:

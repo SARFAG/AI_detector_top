@@ -33,6 +33,8 @@ _RX_META = re.compile(
 
 _RX_COORD3 = re.compile(r"\w+,\s+\w+,\s+(?:\w+,\s+)*(?:and |or )\w+")
 
+from .register import damping as _register_damping
+
 
 def analyse(doc: Document) -> List[Signal]:
     return [
@@ -69,10 +71,19 @@ def _authorial_absence(doc: Document) -> Signal:
     # might try to evade. It is now continuous.
     length_scale = max(0.0, min((n - 180) / 820.0, 1.0))
 
+    # Humans writing technical specifications use almost no first or second
+    # person - it is the register's norm, not a sign of machine authorship.
+    # Measured: two human-written specs score 0.0 and 12.0 presence per 1k,
+    # against 64-89 for the same authors' informal prose. Undamped, this
+    # signal was the single largest contributor to a confirmed false positive
+    # on a human-written spec (+1.14 of an 88.1% score). It is damped, not
+    # removed, because genuine machine specs still sit at the same floor.
+    damping = _register_damping(doc)
+
     if density < 8.0:
         # Essentially authorless. A stray pronoun tapers the score, it does not
         # cancel it.
-        lo = (0.50 + 1.00 * length_scale) * (1.0 - 0.25 * (density / 8.0))
+        lo = (0.50 + 1.00 * length_scale) * (1.0 - 0.25 * (density / 8.0)) * damping
         note = ("no first/second person, no hedges or asides, no questions"
                 if presence == 0 else
                 f"near-zero authorial presence ({presence} marker(s), "
@@ -89,7 +100,7 @@ def _authorial_absence(doc: Document) -> Signal:
 
     # Between the two: declining positive evidence, deliberately mild, because
     # formal human writing legitimately lives here.
-    lo = (55.0 - density) / 47.0 * 0.45
+    lo = (55.0 - density) / 47.0 * 0.45 * damping
     return Signal("stance.authorial_absence", "stance", lo,
                   [f"low authorial presence ({density:.0f}/1k; "
                    f"human samples run 64-89)"], density)
