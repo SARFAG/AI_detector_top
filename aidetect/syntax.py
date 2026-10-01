@@ -86,7 +86,11 @@ def _template_repetition(doc: Document) -> Signal:
     ev = [f"{repeat_share:.1f}% of 5-token templates recur (length-normalised)"]
     ev += [f"'{t}' x{c}" for t, c in top]
 
-    confidence = min(doc.word_count / 400.0, 1.0)
+    # The measure is computed on 200-word windows, so a 200-word document is
+    # exactly one full window and its estimate is as sound as any single window
+    # inside a longer one. The previous /400 halved a well-supported signal for
+    # no stated reason.
+    confidence = min(doc.word_count / 300.0, 1.0)
     lo = max(-1.5, min(1.5, (repeat_share - 10.0) * 0.18)) * confidence
     return Signal("syntax.template_repetition", "syntax", lo, ev, repeat_share)
 

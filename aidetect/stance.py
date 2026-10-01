@@ -44,7 +44,12 @@ def analyse(doc: Document) -> List[Signal]:
 
 def _authorial_absence(doc: Document) -> Signal:
     """Zero first/second person AND zero meta-commentary over a long text."""
-    if doc.word_count < 250:
+    # Gate lowered from 250 to 180 on measurement: truncated to 200 words,
+    # every human sample still showed 11-17 presence markers and every ordinary
+    # machine sample 1-8, while marker-free specs showed exactly 0. Absolute
+    # zero is already separating at this length, so the higher gate was costing
+    # a clean signal without buying any safety.
+    if doc.word_count < 180:
         return Signal("stance.authorial_absence", "stance", 0.0, [], 0.0)
 
     n = doc.word_count
@@ -56,10 +61,10 @@ def _authorial_absence(doc: Document) -> Signal:
     presence = person + meta + questions
 
     if presence == 0:
-        # Scale with length: 250 clean words is ordinary, 1000 is striking.
-        scale = min((n - 250) / 750.0, 1.0)
+        # Scale with length: 180 authorless words is notable, 1000 is striking.
+        scale = max(0.0, min((n - 180) / 820.0, 1.0))
         return Signal(
-            "stance.authorial_absence", "stance", 0.65 + 0.85 * scale,
+            "stance.authorial_absence", "stance", 0.50 + 1.00 * scale,
             [f"no first/second person, no hedges or asides, no questions "
              f"across {n} words"], 0.0)
 
