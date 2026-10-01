@@ -75,6 +75,71 @@ Per-signal reliability, measured as "fired, and pointed the right way":
 | `syntax.template_repetition` | 0.75 | 12 of 12 |
 | `statistical.burstiness` | 0.73 | 11 of 12 |
 
+### 4.0 Accuracy is not importance
+
+The table above answers "when this signal fires, is it right?" It does not
+answer "how much does it move a score?" — and those come apart badly.
+
+Mean absolute contribution across the same 12 documents, in log-odds:
+
+| signal | mean \|lo\| | max | accuracy |
+|---|---|---|---|
+| `syntax.template_repetition` | **0.743** | 1.425 | 0.75 |
+| `statistical.burstiness` | 0.389 | 1.632 | 0.73 |
+| `lexical.tier1_register` | 0.360 | 1.738 | 1.00 |
+| `stylometry.burrows_delta` | 0.349 | 0.677 | 0.82 |
+| `statistical.paragraph_uniformity` | 0.334 | 1.022 | 0.80 |
+| `stance.authorial_absence` | 0.310 | 0.703 | 0.83 |
+| `syntax.clause_uniformity` | 0.240 | 0.465 | **0.90** |
+| `structural.identifier_dispersion` | 0.193 | 0.420 | 0.83 |
+| `discourse.sentence_type_mix` | 0.088 | 0.327 | 0.71 |
+| `forensics.em_dash` | 0.029 | 0.138 | 0.25 |
+
+`clause_uniformity` is the most *accurate* signal in the package and seventh by
+weight. The register lexicon is perfectly accurate and contributes little,
+because it rarely fires. `template_repetition` carries roughly twice the weight
+of anything else despite ranking eighth on accuracy.
+
+**A reliable signal and an important one are different things, and the earlier
+table only measured the first.**
+
+### 4.0b Case study: the one document pair that crossed the line
+
+Two prose versions of the same cross-mission specification, same author
+request, scoring 96.5% and 20.7%. Decomposing the 4.66 log-odds swing:
+
+```
+syntax.template_repetition        +1.71   construction variety
+statistical.paragraph_uniformity  +1.60   paragraph length variance
+stance.enumeration_density        +0.30   comma / list density
+statistical.burstiness            +0.29   sentence length variance
+stance.authorial_absence          +0.23   pronouns, hedges, asides
+syntax.clause_uniformity          +0.21   clause length variance
+stance.term_invariance            +0.18
+stylometry.burrows_delta          +0.15
+structural.identifier_dispersion  +0.07
+```
+
+The second version reads conspicuously more casual — fourteen first-person
+pronouns against two, two rhetorical questions against none, asides like
+*"why would we yank it?"*. **Those casual markers account for 0.23 of 4.66.
+Five percent.**
+
+Seventy-one percent is two structural measures: how varied the sentence
+constructions are, and how unevenly the document is proportioned. The rest is
+a tail of further variance measures — comma density, sentence length, clause
+length — which are the same underlying property counted four ways.
+
+A controlled test confirms the direction. Merging the second document's
+fragmented paragraphs to match the first's structure moved it 20.7% -> 25.4%,
+not toward 96.5%. The difference is not formatting and not voice. The sentences
+were built differently.
+
+**Consequence.** Casual voice is the visible difference and the cheap one;
+`aidetect/bypass.py`'s `authorial_presence` attack injects exactly those
+markers and barely moves a score. The expensive differences are structural, and
+they are what nine mechanical transforms could not fake (section 6.4).
+
 ### 4.1 The register lexicon is precise and nearly useless
 
 *delve, intricate, tapestry, underscores, it's worth noting, in conclusion* —
@@ -185,6 +250,28 @@ widely believed, and because re-proposing them should require new data.
 
 Both below-chance signals have been cut to near-zero weight rather than
 inverted, because n is small — but they can no longer move a verdict.
+
+### 6.4 Mechanical transformation does not close the gap
+
+`aidetect/bypass.py` implements the findings above as nine transforms, one per
+signal, and searches greedily over them — every attack tried each round, best
+move kept, repeats allowed, thirty rounds.
+
+```
+chatgpt_remote_work   100.0% -> 99.8%
+claude_explainer       98.6% -> 94.3%
+seo_article           100.0% -> 97.9%
+spec_cross_mission     95.5% -> 55.0%    attack space exhausted at 10 rounds
+spec11 (bulleted)      97.6% -> 80.8%
+spec12 (prose)         96.5% -> 83.3%
+```
+
+Nothing crosses 0.5. The best case moves 40 points and stops, with
+`paragraph_variance` applied three times contributing more than half of it.
+
+So the findings describe the gap accurately and do not constitute a procedure
+for closing it. The only document in this corpus that crossed the threshold
+did so by being written differently, not transformed (section 4.0b).
 
 ## 6. The result that undermines the rest
 
